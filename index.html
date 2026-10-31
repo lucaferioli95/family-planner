@@ -267,6 +267,16 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 
 .mp-week-summary { margin-top: 26px; }
 .mp-ws-title { font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--ink); }
+.mp-slides-btn, .mp-slide-pager { display: none; }
+@media (max-width: 640px) {
+  .mp-slides-btn { display: inline-block; }
+  .mp-slide-pager { display: flex; gap: 6px; overflow-x: auto; margin: 6px 0 4px; padding-bottom: 2px; scrollbar-width: none; }
+  .mp-slide-pill { flex: 1 0 auto; border: 1px solid var(--line); background: #fff; color: var(--ink-soft); border-radius: 999px; padding: 6px 12px; font: 600 12px 'Karla', system-ui, sans-serif; }
+  .mp-slide-pill.active { background: var(--ink); color: var(--chalk); border-color: var(--ink); }
+  .mp-days-row.mp-days-slides { display: flex; grid-template-columns: none; gap: 10px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; margin: 8px -12px 18px; padding: 0 12px 120px; margin-bottom: -102px; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .mp-days-slides::-webkit-scrollbar { display: none; }
+  .mp-days-slides .mp-day-card { flex: 0 0 calc(100vw - 32px); scroll-snap-align: center; scroll-snap-stop: always; min-height: 70vh; padding: 14px; }
+}
 .mp-ws-toggle { font: inherit; font-size: 12px; font-weight: 600; margin-left: 8px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-soft); cursor: pointer; vertical-align: middle; }
 .mp-ws-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
 .mp-ws-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); }
@@ -795,6 +805,8 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   let recipeModalTab = 'ingredients';
   let pendingDayMealAdd = null;
   let plannerPersonView = 'p_alice';
+  let plannerSlides = (function(){ try { return localStorage.getItem('mp-planner-slides') === '1'; } catch(e){ return false; } })();
+  let slideAutoWeek = null;
   let showClearWeekMenu = false;
   let pendingNutrientAdd = null;
   let showManagePeople = false;
@@ -5143,6 +5155,8 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   window.removeDayMealPicked = removeDayMealPicked;
   window.openIngredientTranslate = openIngredientTranslate;
   window.toggleWeekSummary = toggleWeekSummary;
+  window.toggleSlides = toggleSlides;
+  window.goSlide = goSlide;
   window.closeIngredientTranslate = closeIngredientTranslate;
   window.setTranslationField = setTranslationField;
   window.applyIngredientTranslation = applyIngredientTranslation;
@@ -5633,6 +5647,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     return '<div class="mp-planner-toolbar">' +
       '<div class="mp-person-toggle">' + btns + '</div>' +
       '<div class="mp-toolbar-actions">' +
+        '<button type="button" class="mp-week-add mp-slides-btn" onclick="toggleSlides()">' + (plannerSlides ? 'List view' : 'Day slides') + '</button>' +
         '<button type="button" class="mp-week-add" onclick="openManagePeople()">People</button>' +
         '<button type="button" class="mp-week-add" onclick="openClearWeekMenu()">Clear a meal…</button>' +
       '</div>' +
@@ -5765,6 +5780,55 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       ' <button type="button" class="mp-ws-toggle" onclick="toggleWeekSummary()" aria-expanded="' + (hidden ? 'false' : 'true') + '">' + (hidden ? 'Show' : 'Hide') + '</button></h3>' +
       (hidden ? '' : '<div class="mp-ws-grid">' + cards + '</div>') + '</section>';
   }
+  function toggleSlides(){
+    plannerSlides = !plannerSlides;
+    try { if(plannerSlides) localStorage.setItem('mp-planner-slides', '1'); else localStorage.removeItem('mp-planner-slides'); } catch(e){}
+    slideAutoWeek = null;
+    rerender();
+  }
+  function slideRow(){ return document.querySelector('.mp-days-slides'); }
+  function goSlide(i){
+    const row = slideRow(); if(!row) return;
+    const card = row.children[i]; if(!card) return;
+    row.scrollTo({left: card.offsetLeft - row.offsetLeft - (row.clientWidth - card.offsetWidth) / 2, behavior: 'smooth'});
+  }
+  function slideIndex(row){
+    let best = 0, bestD = 1e9;
+    Array.prototype.forEach.call(row.children, function(c, i){
+      const d = Math.abs((c.offsetLeft - row.offsetLeft + c.offsetWidth / 2) - (row.scrollLeft + row.clientWidth / 2));
+      if(d < bestD){ bestD = d; best = i; }
+    });
+    return best;
+  }
+  function paintSlidePager(){
+    const row = slideRow(); if(!row) return;
+    const idx = slideIndex(row);
+    document.querySelectorAll('.mp-slide-pill').forEach(function(p){
+      const on = parseInt(p.dataset.i, 10) === idx;
+      p.classList.toggle('active', on);
+      if(on && p.scrollIntoView) { try { p.scrollIntoView({block:'nearest', inline:'center'}); } catch(e){} }
+    });
+  }
+  function initSlides(){
+    const row = slideRow(); if(!row) return;
+    if(!row.dataset.bound){
+      row.dataset.bound = '1';
+      let t = null;
+      row.addEventListener('scroll', function(){ if(t) cancelAnimationFrame(t); t = requestAnimationFrame(paintSlidePager); }, {passive:true});
+    }
+    const week = state.weeks.find(function(w){ return w.id === state.activeWeekId; }) || state.weeks[0];
+    if(week && slideAutoWeek !== week.id){
+      slideAutoWeek = week.id;
+      let idx = 0;
+      if(week.weekStart){
+        const diff = Math.round((new Date(new Date().toDateString()) - parseISODate(week.weekStart)) / 86400000);
+        if(diff >= 0 && diff <= 6) idx = diff;
+      }
+      const card = row.children[idx];
+      if(card) row.scrollLeft = card.offsetLeft - row.offsetLeft - (row.clientWidth - card.offsetWidth) / 2;
+    }
+    paintSlidePager();
+  }
   function toggleWeekSummary(){
     store('mp-hide-week-summary', stored('mp-hide-week-summary') === '1' ? null : '1');
     rerender();
@@ -5780,9 +5844,15 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     let datalist = '<datalist id="mp-ingredient-list">';
     sortedIngredientsList().forEach(function(i){ datalist += '<option value="' + esc(i.name) + '">'; });
     datalist += '</datalist>';
+    let pager = '';
+    if(plannerSlides){
+      pager = '<div class="mp-slide-pager" role="tablist">' + DAYS.map(function(d, i){
+        return '<button type="button" class="mp-slide-pill" data-i="' + i + '" onclick="goSlide(' + i + ')">' + d + '</button>';
+      }).join('') + '</div>';
+    }
     return renderWeekTabs() +
-      renderPersonViewToggle() +
-      '<div class="mp-days-row">' + days + '</div>' +
+      renderPersonViewToggle() + pager +
+      '<div class="mp-days-row' + (plannerSlides ? ' mp-days-slides' : '') + '">' + days + '</div>' +
       renderWeekSummary(week) + datalist;
   }
   function renderIngredientsTab(){
@@ -8230,6 +8300,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   function renderApp(){
     const root = document.getElementById('mp-root');
     root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderPrepBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup();
+    try { initSlides(); } catch(e){}
   }
 
   async function boot(tries){
