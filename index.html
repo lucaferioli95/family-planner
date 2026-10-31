@@ -267,6 +267,7 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 
 .mp-week-summary { margin-top: 26px; }
 .mp-ws-title { font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--ink); }
+.mp-ws-toggle { font: inherit; font-size: 12px; font-weight: 600; margin-left: 8px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-soft); cursor: pointer; vertical-align: middle; }
 .mp-ws-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
 .mp-ws-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); }
 .mp-ws-nutrient { font-size: 15px; font-weight: 700; margin: 0 0 6px; }
@@ -5141,6 +5142,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   window.setDayMealPortion = setDayMealPortion;
   window.removeDayMealPicked = removeDayMealPicked;
   window.openIngredientTranslate = openIngredientTranslate;
+  window.toggleWeekSummary = toggleWeekSummary;
   window.closeIngredientTranslate = closeIngredientTranslate;
   window.setTranslationField = setTranslationField;
   window.applyIngredientTranslation = applyIngredientTranslation;
@@ -5758,7 +5760,14 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
         '<div class="mp-nl-row"><span class="mp-nl-label">vs target</span><span class="mp-nl-pct ' + pctClass(pct) + '">' + Math.round(pct) + '%</span></div>' +
       '</div>';
     });
-    return '<section class="mp-week-summary"><h3 class="mp-ws-title">Week summary — ' + esc(week.label) + '</h3><div class="mp-ws-grid">' + cards + '</div></section>';
+    const hidden = stored('mp-hide-week-summary') === '1';
+    return '<section class="mp-week-summary"><h3 class="mp-ws-title">Week summary — ' + esc(week.label) +
+      ' <button type="button" class="mp-ws-toggle" onclick="toggleWeekSummary()" aria-expanded="' + (hidden ? 'false' : 'true') + '">' + (hidden ? 'Show' : 'Hide') + '</button></h3>' +
+      (hidden ? '' : '<div class="mp-ws-grid">' + cards + '</div>') + '</section>';
+  }
+  function toggleWeekSummary(){
+    store('mp-hide-week-summary', stored('mp-hide-week-summary') === '1' ? null : '1');
+    rerender();
   }
   function renderPlannerTab(){
     const week = state.weeks.find(w=>w.id===state.activeWeekId) || state.weeks[0];
