@@ -2,6 +2,13 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.2.0 - 2026-10-31
+- Planner header decluttered on phones: the week dropdown is replaced by a calendar (tap the date button). Every row is a week; future weeks are there, weeks that already have a plan are marked, "this week" is outlined, and the week you are viewing is filled in. Tapping an empty week starts a new plan for it. Rename, copy and delete for a week moved into the calendar.
+- "Things to prepare in advance" now shows as a small clock icon with the count; tap it to see the list.
+- People moved to Settings. The person switch shows A and L instead of the full names.
+- Removed "Clear a meal".
+- In list view on a phone, swipe a meal to the left to delete it (a short swipe shows Delete, a long swipe deletes at once). There is an Undo for a few seconds.
+
 ## 1.1.0 - 2026-10-31
 - On a phone, the Planner tab has a "Day slides" button: each day fills the screen and you swipe left and right between days, with a Mon to Sun strip to jump around. It opens on today when the week includes it. "List view" brings back the normal layout. The choice is remembered on that device.
 

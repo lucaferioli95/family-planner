@@ -267,6 +267,41 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 
 .mp-week-summary { margin-top: 26px; }
 .mp-ws-title { font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--ink); }
+
+/* week picker, calendar, prep icon, swipe-to-delete */
+.mp-week-pick { display: inline-flex; align-items: center; gap: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font: 600 14px 'Karla', system-ui, sans-serif; color: var(--ink); }
+.mp-week-now { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; background: var(--ink); color: var(--chalk); border-radius: 999px; padding: 2px 8px; }
+.mp-cal-card { max-width: 380px; width: 100%; text-align: left; }
+.mp-cal-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.mp-cal-title { flex: 1; text-align: center; font-size: 16px; }
+.mp-cal-dow, .mp-cal-week { display: grid; grid-template-columns: repeat(7, 1fr) 22px; align-items: center; }
+.mp-cal-dow span { text-align: center; font-size: 11px; color: var(--ink-soft); padding: 4px 0; }
+.mp-cal-grid { display: flex; flex-direction: column; gap: 3px; }
+.mp-cal-week { width: 100%; border: 2px solid transparent; border-radius: 10px; background: none; padding: 2px 0; font-family: inherit; color: var(--ink); }
+.mp-cal-week.mp-cal-has { background: var(--surface); }
+.mp-cal-week.mp-cal-now { border-color: var(--gold, #C9A24B); }
+.mp-cal-week.mp-cal-active { background: var(--ink); color: var(--chalk); }
+.mp-cal-day { text-align: center; font-size: 14px; padding: 8px 0; border-radius: 50%; }
+.mp-cal-out { opacity: .35; }
+.mp-cal-today { font-weight: 800; text-decoration: underline; }
+.mp-cal-mark { font-size: 9px; text-align: center; opacity: .7; }
+.mp-cal-legend { font-size: 11px; color: var(--ink-soft); margin: 10px 0; line-height: 1.5; }
+.mp-cal-key { display: inline-block; width: 12px; height: 12px; border-radius: 4px; vertical-align: middle; }
+.mp-cal-key-now { border: 2px solid var(--gold, #C9A24B); }
+.mp-cal-key-sel { background: var(--ink); }
+.mp-cal-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.mp-prep-compact { display: inline-block; padding: 0 12px; border-radius: 999px; margin-bottom: 10px; }
+.mp-prep-compact .mp-prep-banner-title { padding: 6px 0; width: auto; gap: 6px; }
+.mp-prep-count { font-weight: 800; }
+.mp-sw-wrap { position: relative; }
+.mp-sw-bg { display: none; position: absolute; inset: 0; background: #B3261E; color: #fff; font: 700 13px 'Karla', system-ui, sans-serif; align-items: center; justify-content: flex-end; padding-right: 22px; border-radius: 6px; }
+.mp-sw-wrap.sw-on > .mp-sw-bg { display: flex; }
+.mp-sw-wrap.sw-on { overflow: hidden; border-radius: 6px; }
+.mp-sw-wrap > .mp-meal-block, .mp-sw-wrap > .mp-standalone-row { position: relative; background: var(--paper); touch-action: pan-y; }
+.mp-sw-wrap:has(.mp-meal-menu) { z-index: 30; }
+.mp-undo-bar { position: fixed; left: 12px; right: 12px; bottom: 16px; max-width: 420px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #222; color: #fff; border-radius: 10px; padding: 12px 14px; font: 14px 'Karla', system-ui, sans-serif; z-index: 2000; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+.mp-undo-bar button { background: none; border: none; color: #F5D78A; font-weight: 800; font-size: 14px; }
+.mp-undo-bar[hidden] { display: none; }
 .mp-slides-btn, .mp-slide-pager { display: none; }
 @media (max-width: 640px) {
   .mp-slides-btn { display: inline-block; }
@@ -5156,6 +5191,8 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   window.openIngredientTranslate = openIngredientTranslate;
   window.toggleWeekSummary = toggleWeekSummary;
   window.toggleSlides = toggleSlides;
+  window.openCal = openCal; window.closeCal = closeCal; window.calNav = calNav; window.calToday = calToday; window.calPickWeek = calPickWeek; window.calPickLegacy = calPickLegacy;
+  window.swipeDeleteBtn = swipeDeleteBtn; window.undoSwipeDelete = undoSwipeDelete;
   window.goSlide = goSlide;
   window.closeIngredientTranslate = closeIngredientTranslate;
   window.setTranslationField = setTranslationField;
@@ -5363,21 +5400,91 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       '</div>';
     }
 
-    const options = weeksNewestFirst.map(function(w){
-      const isPast = w.weekStart && toISODate(addDays(parseISODate(w.weekStart), 6)) < today;
-      const label = weekDropdownLabel(w) + (isPast ? ' · past' : '');
-      return '<option value="' + w.id + '" ' + (w.id===state.activeWeekId?'selected':'') + '>' + esc(label) + '</option>';
-    }).join('');
-
-    const isPendingDelete = activeWeek && pendingDelete === ('week:' + activeWeek.id);
+    const isNow = activeWeek && activeWeek.weekStart && activeWeek.weekStart <= today && toISODate(addDays(parseISODate(activeWeek.weekStart), 6)) >= today;
     return '<div class="mp-week-bar">' +
-      '<select class="mp-week-select" onchange="setActiveWeek(this.value)">' + options + '</select>' +
-      (activeWeek ? '<span class="mp-week-tab-actions">' +
-        '<button type="button" class="mp-icon-btn" title="Rename" onclick="startRenameWeek(\'' + activeWeek.id + '\')">&#9998;</button>' +
-        '<button type="button" class="mp-icon-btn" title="Duplicate for next week" onclick="duplicateWeek(\'' + activeWeek.id + '\')">&#10697;</button>' +
-        '<button type="button" class="mp-icon-btn ' + (isPendingDelete?'mp-confirm':'') + '" title="Delete" onclick="deleteWeek(\'' + activeWeek.id + '\')">' + (isPendingDelete?'Sure?':'&times;') + '</button>' +
-      '</span>' : '') +
-      '<button type="button" class="mp-week-add" onclick="openNewWeek()">+ New week</button>' +
+      '<button type="button" class="mp-week-pick" onclick="openCal()" aria-label="Choose a week">' +
+        '<span aria-hidden="true">&#128197;</span> <span class="mp-week-pick-label">' + esc(activeWeek ? weekDropdownLabel(activeWeek) : 'Choose a week') + '</span>' +
+        (isNow ? '<span class="mp-week-now">this week</span>' : '') +
+      '</button>' +
+    '</div>';
+  }
+  // ---------- calendar week picker ----------
+  let calOpen = false, calMonth = null;
+  const MONTH_NAMES_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  function weekStartKey(w){ return w.weekStart ? toISODate(mondayOf(parseISODate(w.weekStart))) : null; }
+  function openCal(){
+    const w = state.weeks.find(function(x){ return x.id === state.activeWeekId; }) || state.weeks[0];
+    const base = (w && w.weekStart) ? addDays(parseISODate(w.weekStart), 3) : new Date();
+    calMonth = toISODate(new Date(base.getFullYear(), base.getMonth(), 1));
+    calOpen = true; rerender();
+  }
+  function closeCal(){ calOpen = false; rerender(); }
+  function calNav(n){
+    const d = parseISODate(calMonth);
+    calMonth = toISODate(new Date(d.getFullYear(), d.getMonth() + n, 1));
+    rerender();
+  }
+  function calToday(){
+    const t = new Date();
+    calMonth = toISODate(new Date(t.getFullYear(), t.getMonth(), 1));
+    rerender();
+  }
+  function calPickWeek(el){
+    const start = el.dataset.start;
+    const w = state.weeks.find(function(x){ return weekStartKey(x) === start; });
+    calOpen = false;
+    if(w){ setActiveWeek(w.id); return; }
+    pendingNewWeek = {mode: 'choose', weekStart: start, wd: defaultWorkDays(), plan: null};
+    rerender();
+  }
+  function calPickLegacy(el){ calOpen = false; setActiveWeek(el.dataset.id); }
+  function renderCalendarPopup(){
+    if(!calOpen || !calMonth) return '';
+    const first = parseISODate(calMonth);
+    const today = toISODate(new Date());
+    const active = state.weeks.find(function(x){ return x.id === state.activeWeekId; });
+    const activeKey = active ? weekStartKey(active) : null;
+    const have = {};
+    state.weeks.forEach(function(w){ const k = weekStartKey(w); if(k) have[k] = w; });
+    const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+    let cur = mondayOf(first);
+    let rows = '';
+    while(cur <= last){
+      const key = toISODate(cur);
+      const end = toISODate(addDays(cur, 6));
+      const cells = [];
+      for(let i = 0; i < 7; i++){
+        const d = addDays(cur, i), iso = toISODate(d);
+        cells.push('<span class="mp-cal-day' + (d.getMonth() !== first.getMonth() ? ' mp-cal-out' : '') + (iso === today ? ' mp-cal-today' : '') + '">' + d.getDate() + '</span>');
+      }
+      const cls = 'mp-cal-week' + (have[key] ? ' mp-cal-has' : '') + (key === activeKey ? ' mp-cal-active' : '') + ((key <= today && end >= today) ? ' mp-cal-now' : '');
+      rows += '<button type="button" class="' + cls + '" data-start="' + key + '" onclick="calPickWeek(this)" aria-label="Week of ' + key + '">' + cells.join('') +
+        '<span class="mp-cal-mark">' + (have[key] ? '&#9679;' : '') + '</span></button>';
+      cur = addDays(cur, 7);
+    }
+    const legacy = state.weeks.filter(function(w){ return !w.weekStart; }).map(function(w){
+      return '<button type="button" class="mp-week-add" data-id="' + w.id + '" onclick="calPickLegacy(this)">' + esc(w.label) + '</button>';
+    }).join('');
+    const sure = active && pendingDelete === ('week:' + active.id);
+    const actions = active ? ('<div class="mp-cal-actions">' +
+      '<button type="button" class="mp-week-add" onclick="calOpen=false; startRenameWeek(\'' + active.id + '\')">&#9998; Rename</button>' +
+      '<button type="button" class="mp-week-add" onclick="calOpen=false; duplicateWeek(\'' + active.id + '\')">&#10697; Copy to next week</button>' +
+      '<button type="button" class="mp-week-add ' + (sure ? 'mp-confirm' : '') + '" onclick="deleteWeek(\'' + active.id + '\')">' + (sure ? 'Sure?' : '&times; Delete week') + '</button>' +
+    '</div>') : '';
+    return '<div class="mp-modal-backdrop" onclick="closeCal()">' +
+      '<div class="mp-modal-card mp-cal-card" onclick="event.stopPropagation()">' +
+        '<div class="mp-cal-head">' +
+          '<button type="button" class="mp-icon-btn" onclick="calNav(-1)" aria-label="Previous month">&#8249;</button>' +
+          '<strong class="mp-cal-title">' + MONTH_NAMES_LONG[first.getMonth()] + ' ' + first.getFullYear() + '</strong>' +
+          '<button type="button" class="mp-icon-btn" onclick="calNav(1)" aria-label="Next month">&#8250;</button>' +
+          '<button type="button" class="mp-week-add" onclick="calToday()">Today</button>' +
+        '</div>' +
+        '<div class="mp-cal-dow">' + ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(d){ return '<span>' + d.charAt(0) + '</span>'; }).join('') + '<span></span></div>' +
+        '<div class="mp-cal-grid">' + rows + '</div>' +
+        '<p class="mp-cal-legend"><span class="mp-cal-key mp-cal-key-now"></span> this week &nbsp; <span class="mp-cal-key mp-cal-key-sel"></span> shown &nbsp; &#9679; has a plan &nbsp; Tap any week; an empty one starts a new plan.</p>' +
+        (legacy ? '<div class="mp-cal-actions">' + legacy + '</div>' : '') + actions +
+        '<button type="button" class="mp-modal-cancel" onclick="closeCal()">Close</button>' +
+      '</div>' +
     '</div>';
   }
   function renderRow(week, day, slot, row, idx){
@@ -5425,7 +5532,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
           '<button type="button" class="mp-meal-menu-item mp-meal-menu-danger" data-week="' + week.id + '" data-day="' + day + '" data-slot="' + slot + '" data-choice="' + choice.id + '" onclick="closeMealMenu(); removeMealChoice(this)">&times; Remove meal</button>' +
         '</div>'
       : '';
-    return '<div class="mp-meal-block ' + (choice.skipShopping?'mp-meal-block-skip':'') + '">' +
+    return swipeWrapOpen(week, day, slot, choice) + '<div class="mp-meal-block ' + (choice.skipShopping?'mp-meal-block-skip':'') + '">' +
       // Tapping a planned meal is almost always "how do I make this?", not
       // "let me edit the grams". The quantities moved into the dots menu.
       '<div class="mp-meal-block-head"' +
@@ -5442,7 +5549,11 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       '</div>' +
       (isOpen ? '<div class="mp-meal-block-body">' + body + '</div>' : '') +
       renderLeftoverAsk(choice) +
-    '</div>';
+    '</div></div>';
+  }
+  function swipeWrapOpen(week, day, slot, choice){
+    return '<div class="mp-sw-wrap" data-week="' + week.id + '" data-day="' + day + '" data-slot="' + slot + '" data-choice="' + choice.id + '" data-name="' + esc(choice.name) + '">' +
+      '<div class="mp-sw-bg" onclick="swipeDeleteBtn(this)" role="button" aria-label="Delete this meal">Delete</div>';
   }
   function renderLeftoverAsk(choice){
     const x = leftoverHints[choice.id];
@@ -5461,11 +5572,11 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     let rowIdx = -1;
     allRows.forEach(function(row, idx){ if(row.choiceId === choice.id) rowIdx = idx; });
     if(rowIdx === -1) return '';
-    return '<div class="mp-standalone-row ' + (choice.skipShopping?'mp-meal-block-skip':'') + '">' +
+    return swipeWrapOpen(week, day, slot, choice) + '<div class="mp-standalone-row ' + (choice.skipShopping?'mp-meal-block-skip':'') + '">' +
       renderRow(week, day, slot, allRows[rowIdx], rowIdx) +
       renderSkipShoppingBtn(week, day, slot, choice) +
       '<button type="button" class="mp-icon-btn" onclick="removeMealChoice(this)" title="Remove" data-week="' + week.id + '" data-day="' + day + '" data-slot="' + slot + '" data-choice="' + choice.id + '">&times;</button>' +
-    '</div>';
+    '</div></div>';
   }
   const PICKER_SLOT_LABELS = {Breakfast:'Breakfast', Snack:'Snack 1', Lunch:'Lunch', Snack2:'Snack 2', Dinner:'Dinner'};
   function renderSlot(week, day, slot){
@@ -5642,14 +5753,12 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   }
   function renderPersonViewToggle(){
     const btns = people().map(function(p){
-      return '<button type="button" class="mp-person-toggle-btn ' + (plannerPersonView===p.id?'active':'') + '" onclick="setPlannerPersonView(\'' + p.id + '\')">' + esc(p.name) + '</button>';
+      return '<button type="button" class="mp-person-toggle-btn ' + (plannerPersonView===p.id?'active':'') + '" onclick="setPlannerPersonView(\'' + p.id + '\')" title="' + esc(p.name) + '" aria-label="' + esc(p.name) + '">' + esc(String(p.name || '?').trim().charAt(0).toUpperCase()) + '</button>';
     }).join('');
     return '<div class="mp-planner-toolbar">' +
       '<div class="mp-person-toggle">' + btns + '</div>' +
       '<div class="mp-toolbar-actions">' +
         '<button type="button" class="mp-week-add mp-slides-btn" onclick="toggleSlides()">' + (plannerSlides ? 'List view' : 'Day slides') + '</button>' +
-        '<button type="button" class="mp-week-add" onclick="openManagePeople()">People</button>' +
-        '<button type="button" class="mp-week-add" onclick="openClearWeekMenu()">Clear a meal…</button>' +
       '</div>' +
     '</div>';
   }
@@ -5780,6 +5889,93 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       ' <button type="button" class="mp-ws-toggle" onclick="toggleWeekSummary()" aria-expanded="' + (hidden ? 'false' : 'true') + '">' + (hidden ? 'Show' : 'Hide') + '</button></h3>' +
       (hidden ? '' : '<div class="mp-ws-grid">' + cards + '</div>') + '</section>';
   }
+
+  // ---------- swipe left to delete a meal (list view) ----------
+  let SW = null, swSuppressUntil = 0, swLast = null, swUndoTimer = null;
+  function swDelete(wrap){
+    const ds = wrap.dataset;
+    const w = state.weeks.find(function(x){ return x.id === ds.week; }); if(!w) return;
+    const slotObj = w.days[ds.day][ds.slot];
+    const ci = (slotObj.choices || []).findIndex(function(c){ return c.id === ds.choice; }); if(ci < 0) return;
+    const choice = slotObj.choices[ci];
+    const rows = [];
+    slotObj.rows.forEach(function(r, i){ if(r.choiceId === ds.choice) rows.push({row: JSON.parse(JSON.stringify(r)), idx: i}); });
+    swLast = {week: ds.week, day: ds.day, slot: ds.slot, choice: JSON.parse(JSON.stringify(choice)), ci: ci, rows: rows, name: ds.name};
+    update(()=>{
+      slotObj.choices = slotObj.choices.filter(function(c){ return c.id !== ds.choice; });
+      slotObj.rows = slotObj.rows.filter(function(r){ return r.choiceId !== ds.choice; });
+    });
+    showUndoBar('Removed “' + (ds.name || 'meal') + '”');
+  }
+  function swipeDeleteBtn(el){ const wrap = el.closest('.mp-sw-wrap'); if(wrap) swDelete(wrap); }
+  function showUndoBar(text){
+    let bar = document.getElementById('mp-undo-bar');
+    if(!bar){ bar = document.createElement('div'); bar.id = 'mp-undo-bar'; bar.className = 'mp-undo-bar'; document.body.appendChild(bar); }
+    bar.innerHTML = '<span></span><button type="button" onclick="undoSwipeDelete()">Undo</button>';
+    bar.firstChild.textContent = text;
+    bar.hidden = false;
+    if(swUndoTimer) clearTimeout(swUndoTimer);
+    swUndoTimer = setTimeout(function(){ bar.hidden = true; swLast = null; }, 6000);
+  }
+  function undoSwipeDelete(){
+    const bar = document.getElementById('mp-undo-bar'); if(bar) bar.hidden = true;
+    const L = swLast; swLast = null; if(!L) return;
+    const w = state.weeks.find(function(x){ return x.id === L.week; }); if(!w) return;
+    const slotObj = w.days[L.day][L.slot];
+    update(()=>{
+      slotObj.choices.splice(Math.min(L.ci, slotObj.choices.length), 0, L.choice);
+      L.rows.slice().sort(function(a, b){ return a.idx - b.idx; }).forEach(function(x){ slotObj.rows.splice(Math.min(x.idx, slotObj.rows.length), 0, x.row); });
+    });
+  }
+  function swClose(except){
+    document.querySelectorAll('.mp-sw-wrap.sw-open').forEach(function(w){
+      if(w === except) return;
+      w.classList.remove('sw-open', 'sw-on');
+      const b = w.children[1]; if(b){ b.style.transition = 'transform .18s'; b.style.transform = ''; }
+    });
+  }
+  document.addEventListener('pointerdown', function(e){
+    const wrap = e.target.closest && e.target.closest('.mp-sw-wrap');
+    if(!wrap || e.target.closest('.mp-sw-bg')){ swClose(null); return; }
+    if(e.pointerType === 'mouse' || wrap.closest('.mp-days-slides')) return;
+    if(e.target.closest('button, .mp-meal-menu')) { swClose(wrap); return; }
+    swClose(wrap);
+    const block = wrap.children[1]; if(!block) return;
+    SW = {wrap: wrap, block: block, id: e.pointerId, x: e.clientX, y: e.clientY, active: false, w: wrap.offsetWidth, base: wrap.classList.contains('sw-open') ? -88 : 0, t: 0};
+  });
+  document.addEventListener('pointermove', function(e){
+    if(!SW || e.pointerId !== SW.id) return;
+    const dx = e.clientX - SW.x, dy = e.clientY - SW.y;
+    if(!SW.active){
+      if(Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)){ SW = null; return; }
+      if(Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5){
+        SW.active = true; SW.wrap.classList.add('sw-on'); SW.block.style.transition = 'none';
+        try { SW.block.setPointerCapture(e.pointerId); } catch(x){}
+      } else return;
+    }
+    SW.t = Math.max(-SW.w, Math.min(0, SW.base + dx));
+    SW.block.style.transform = 'translateX(' + SW.t + 'px)';
+  });
+  function swEnd(e, cancel){
+    if(!SW || e.pointerId !== SW.id) return;
+    const S = SW; SW = null;
+    if(!S.active) return;
+    swSuppressUntil = Date.now() + 350;
+    S.block.style.transition = 'transform .18s';
+    if(!cancel && S.t < -S.w * 0.55){
+      S.block.style.transform = 'translateX(-' + S.w + 'px)';
+      setTimeout(function(){ swDelete(S.wrap); }, 160);
+    } else if(!cancel && S.t < -44){
+      S.block.style.transform = 'translateX(-88px)'; S.wrap.classList.add('sw-open');
+    } else {
+      S.block.style.transform = ''; S.wrap.classList.remove('sw-open', 'sw-on');
+    }
+  }
+  document.addEventListener('pointerup', function(e){ swEnd(e, false); });
+  document.addEventListener('pointercancel', function(e){ swEnd(e, true); });
+  document.addEventListener('click', function(e){
+    if(Date.now() < swSuppressUntil && e.target.closest && e.target.closest('.mp-sw-wrap')){ e.stopPropagation(); e.preventDefault(); }
+  }, true);
   function toggleSlides(){
     plannerSlides = !plannerSlides;
     try { if(plannerSlides) localStorage.setItem('mp-planner-slides', '1'); else localStorage.removeItem('mp-planner-slides'); } catch(e){}
@@ -7264,6 +7460,10 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     const summary = n === 1
       ? '1 thing needs prep in advance'
       : n + ' things need prep in advance';
+    if(!prepBannerOpen){
+      return '<div class="mp-prep-banner mp-prep-compact"><button type="button" class="mp-prep-banner-title" onclick="togglePrepBanner()" title="' + esc(summary) + '" aria-label="' + esc(summary) + '" aria-expanded="false">' +
+        '<span>&#9200;</span><span class="mp-prep-count">' + n + '</span></button></div>';
+    }
     return '<div class="mp-prep-banner ' + (prepBannerOpen ? 'mp-prep-open' : '') + '">' +
       '<button type="button" class="mp-prep-banner-title" onclick="togglePrepBanner()" aria-expanded="' + (prepBannerOpen?'true':'false') + '">' +
         '<span class="mp-prep-caret">' + (prepBannerOpen ? '&#9662;' : '&#9656;') + '</span>' +
@@ -7746,6 +7946,11 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
 
     return '<div class="mp-panel">' +
       '<div class="mp-panel-head"><h2>Settings</h2></div>' +
+
+      settingsSection('people', 'People',
+        '<p class="mp-settings-note">Who the planner is for. The planner shows each person as their first letter.</p>' +
+        '<button type="button" class="mp-week-add" onclick="openManagePeople()">Manage people…</button>'
+      ) +
 
       settingsSection('structure', 'Meal structure',
         '<p class="mp-settings-note">Courses describe what a dish is. Which meals a recipe can go in (breakfast, lunch…) is set on each recipe.</p>' +
@@ -8299,7 +8504,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   }
   function renderApp(){
     const root = document.getElementById('mp-root');
-    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderPrepBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup();
+    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderPrepBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup() + renderCalendarPopup();
     try { initSlides(); } catch(e){}
   }
 
