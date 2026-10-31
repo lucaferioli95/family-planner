@@ -185,6 +185,26 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 .mp-basket-unit { font-size: 11px; color: var(--ink-soft); min-width: 18px; }
 .mp-basket-tag { flex: 0 0 auto; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
 .mp-basket-remove { flex: 0 0 auto; }
+
+.mp-modal-card.mp-tr-modal { max-width: 560px; width: 100%; text-align: left; display: flex; flex-direction: column; max-height: 88vh; }
+.mp-tr-modal > .mp-modal-title, .mp-tr-modal > .mp-daymeal-summary, .mp-tr-modal > .mp-settings-note,
+.mp-tr-modal > .mp-recipe-warning-note, .mp-tr-modal > .mp-suit-row, .mp-tr-modal > button { flex: 0 0 auto; }
+.mp-tr-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; touch-action: pan-y; }
+.mp-tr-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.mp-tr-row:last-child { border-bottom: none; }
+.mp-tr-same { opacity: 0.55; }
+.mp-tr-merge { background: var(--gold-soft); }
+.mp-tr-tag-warn { color: var(--sage-deep); }
+.mp-tr-old { flex: 1 1 40%; min-width: 0; font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-tr-arrow { flex: 0 0 auto; color: var(--ink-soft); font-size: 11px; }
+.mp-tr-input { flex: 1 1 40%; min-width: 0; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--chalk); }
+.mp-tr-unit { flex: 0 0 84px; min-width: 0; font-family: inherit; font-size: 12px; color: var(--ink-soft); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--chalk); text-align: center; }
+.mp-tr-tag { flex: 0 0 auto; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--amber); font-weight: 700; }
+@media (max-width: 560px) {
+  .mp-tr-row { flex-wrap: wrap; }
+  .mp-tr-old { flex: 1 1 100%; }
+  .mp-tr-arrow { display: none; }
+}
 .mp-daymeal-label { font-size: 12px; letter-spacing: 0; color: var(--ink-soft); font-weight: 700; margin: 12px 0 6px; }
 .mp-daymeal-choices { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .mp-daymeal-choice { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--ink); }
@@ -778,6 +798,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   let pendingNutrientAdd = null;
   let showManagePeople = false;
   let pendingIngredientEdit = null;
+  let pendingIngredientTranslate = null;
   let cookViewRecipeId = null;
   let cookViewPeople = [];
   let cookViewServings = null;
@@ -4005,6 +4026,304 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     if(!k) return '';
     return Object.prototype.hasOwnProperty.call(UNITS_IT, k) ? UNITS_IT[k] : u;
   }
+  // ---------- one-off: putting the ingredient list into Italian ----------
+  // The export above translates a copy on the way out. This translates the
+  // planner's own data, in place, once. It is a dictionary rather than a call
+  // to Gemini because these are the names in this planner, they want to be
+  // right rather than plausible ("Tahina" is Tahina, "Montasio" is Montasio),
+  // and a rename that touches every recipe and every planned week should not
+  // depend on the network halfway through.
+  const UNITS_IT_APP = {
+    g:'g', kg:'kg', mg:'mg', ml:'ml', l:'l', cm:'cm',
+    unit:'unità', units:'unità', piece:'pezzo', pieces:'pezzi',
+    ts:'cucchiaino', tsp:'cucchiaino', tbs:'cucchiaio', tbsp:'cucchiaio',
+    clove:'spicchio', cloves:'spicchi', leaf:'foglia', leaves:'foglie',
+    slice:'fetta', slices:'fette', pinch:'pizzico', handful:'manciata',
+    bunch:'mazzetto', sachet:'bustina', package:'confezione', pack:'confezione',
+    cup:'tazza', cups:'tazze', can:'lattina', tin:'barattolo', jar:'barattolo',
+    stalk:'gambo', sprig:'rametto', drop:'goccia', drops:'gocce'
+  };
+  const INGREDIENTS_IT = {
+    'almond butter':'Burro di mandorle', 'almonds':'Mandorle', 'apple vinegar':'Aceto di mele',
+    'apricot':'Albicocca', 'aubergine raw':'Melanzana cruda', 'aubergine':'Melanzana',
+    'avocado':'Avocado', 'balsamic vinegar':'Aceto balsamico', 'barley flakes':'Fiocchi d’orzo',
+    'barley dry':'Orzo secco', 'basil':'Basilico', 'bean cannellini ckd':'Fagioli cannellini cotti',
+    'bean cannellini dry':'Fagioli cannellini secchi', 'beansprout':'Germogli di soia',
+    'bread':'Pane', 'breadcrumbs':'Pangrattato', 'broccoli tender steam':'Broccoli a stelo tenero',
+    'broccoli raw':'Broccoli crudi', 'broccoli':'Broccoli',
+    'brussel sprouts raw':'Cavolini di Bruxelles crudi', 'buckwheat flakes':'Fiocchi di grano saraceno',
+    'butter beans ckd':'Fagioli di Spagna cotti', 'butter':'Burro', 'capers':'Capperi',
+    'carrot':'Carota', 'cashews':'Anacardi', 'cauliflower raw':'Cavolfiore crudo',
+    'cauliflower':'Cavolfiore', 'celery':'Sedano', 'chia seeds':'Semi di chia',
+    'chickpeas flour':'Farina di ceci', 'chickpeas ckd':'Ceci cotti', 'chickpeas dry':'Ceci secchi',
+    'chocolate chips':'Gocce di cioccolato', 'cilantro':'Coriandolo', 'cinnamon':'Cannella',
+    'coriander seeds':'Semi di coriandolo', 'cornflour':'Amido di mais',
+    'courgettes raw':'Zucchine crude', 'courgettes ckd':'Zucchine cotte', 'courgettes':'Zucchine',
+    'cous cous dry':'Cous cous secco', 'cow’s milk':'Latte vaccino', "cow's milk":'Latte vaccino',
+    'cucumber':'Cetriolo', 'cumin':'Cumino', 'curry':'Curry', 'dha supplement':'Integratore DHA',
+    'dates':'Datteri', 'edamame raw':'Edamame crudi', 'edamame':'Edamame', 'egg':'Uovo',
+    'feta':'Feta', 'flax seeds':'Semi di lino', 'fruit':'Frutta', 'garlic':'Aglio',
+    'ginger':'Zenzero', 'grated mozzarella':'Mozzarella grattugiata', 'greek yogurt':'Yogurt greco',
+    'halloumi':'Halloumi', 'hazelnuts':'Nocciole', 'nocciole':'Nocciole',
+    'kale raw':'Cavolo riccio crudo', 'kale':'Cavolo riccio', 'kashkaval':'Kashkaval',
+    'lemon':'Limone', 'lentils ckd':'Lenticchie cotte', 'lentils dry':'Lenticchie secche',
+    'lime':'Lime', 'maple butter':'Burro d’acero', 'maple syrup':'Sciroppo d’acero',
+    'mint':'Menta', 'miso':'Miso', 'montasio':'Montasio', 'mozzarella':'Mozzarella',
+    'mushroom raw':'Funghi crudi', 'mushroom':'Funghi', 'noodle dry':'Noodle secchi',
+    'nori sheet':'Foglio di nori', 'nutmeg':'Noce moscata', 'nutritional yeast':'Lievito alimentare',
+    'oats raw':'Avena', 'oats ckg':'Avena cotta', 'oats ckd':'Avena cotta', 'oats':'Avena',
+    'oil':'Olio', 'other':'Altro', 'olive oil':'Olio d’oliva', 'olive':'Olive', 'olives':'Olive',
+    'onion raw':'Cipolla cruda', 'onion':'Cipolla', 'oregan':'Origano', 'oregano':'Origano',
+    'paprika':'Paprika', 'parmesan':'Parmigiano', 'parsley dry':'Prezzemolo secco',
+    'parsley fresh':'Prezzemolo fresco', 'parsley':'Prezzemolo', 'pasta dry':'Pasta secca',
+    'pasta':'Pasta', 'peach':'Pesca', 'peanut butter':'Burro di arachidi', 'peanut':'Arachidi',
+    'peanuts':'Arachidi', 'peas raw':'Piselli crudi', 'peas':'Piselli',
+    'peper red raw':'Peperone rosso crudo', 'pepper red raw':'Peperone rosso crudo',
+    'peper yellow raw':'Peperone giallo crudo', 'pepper yellow raw':'Peperone giallo crudo',
+    'pepper':'Pepe', 'pesto':'Pesto', 'pine nuts':'Pinoli', 'pistachios':'Pistacchi',
+    'polenta':'Polenta', 'pomegranate':'Melograno', 'potato':'Patata', 'prawn':'Gamberi',
+    'puff pastry':'Pasta sfoglia', 'pumpkin':'Zucca', 'pumpkin seeds':'Semi di zucca',
+    'quinoa ckd':'Quinoa cotta', 'quinoa':'Quinoa', 'raisins':'Uvetta',
+    'rice risotto':'Riso da risotto', 'rice basmati dry':'Riso basmati secco',
+    'rice sushi':'Riso per sushi', 'rice':'Riso', 'rosemary':'Rosmarino',
+    'rye flakes':'Fiocchi di segale', 'saffron':'Zafferano', 'salmon fillet':'Filetto di salmone',
+    'salmon':'Salmone', 'salt':'Sale', 'seitan':'Seitan', 'sesame oil':'Olio di sesamo',
+    'sesame seed':'Semi di sesamo', 'sesame seeds':'Semi di sesamo', 'shallot':'Scalogno',
+    'skyr':'Skyr', 'soy sauce':'Salsa di soia', 'soya sauce':'Salsa di soia',
+    'soya milk':'Latte di soia', 'soy milk':'Latte di soia', 'spelt flakes':'Fiocchi di farro',
+    'spelt raw':'Farro', 'spelt':'Farro', 'spinach raw':'Spinaci crudi', 'spinach':'Spinaci',
+    'spring onion raw':'Cipollotto crudo', 'spring onion':'Cipollotto', 'sugar':'Zucchero',
+    'sun-dried tomatoes':'Pomodori secchi', 'sweer corn':'Mais dolce', 'sweet corn':'Mais dolce',
+    'sweet potato raw':'Patata dolce cruda', 'sweet potato':'Patata dolce', 'tahina':'Tahina',
+    'tahini':'Tahina', 'tempeh':'Tempeh', 'thyme':'Timo', 'toast':'Pane tostato',
+    'tofu ckd':'Tofu cotto', 'tofu':'Tofu', 'tomato sauce':'Passata di pomodoro',
+    'tomato':'Pomodoro', 'tomatoes':'Pomodori', 'tuna can':'Tonno in scatola', 'tuna':'Tonno',
+    'turmeric':'Curcuma', 'vegetable broth':'Brodo vegetale', 'walnut butter':'Burro di noci',
+    'walnuts':'Noci', 'water':'Acqua', 'white flour':'Farina bianca',
+    'wholemeal flour':'Farina integrale', 'yeast pan degli angeli':'Lievito Pane degli Angeli',
+    'yeast':'Lievito'
+  };
+  function italianIngredientName(plain){
+    const k = String(plain || '').trim().toLowerCase();
+    if(!k) return '';
+    if(Object.prototype.hasOwnProperty.call(INGREDIENTS_IT, k)) return INGREDIENTS_IT[k];
+    // Apostrophes come in two shapes and nobody types the same one twice.
+    const alt = k.replace(/’/g, "'");
+    if(Object.prototype.hasOwnProperty.call(INGREDIENTS_IT, alt)) return INGREDIENTS_IT[alt];
+    return '';
+  }
+  function italianUnit(u){
+    const k = String(u || '').trim().toLowerCase();
+    if(!k) return '';
+    return Object.prototype.hasOwnProperty.call(UNITS_IT_APP, k) ? UNITS_IT_APP[k] : String(u).trim();
+  }
+  function composeIngredientName(plain, unit){
+    const p = String(plain || '').trim();
+    const u = String(unit || '').trim();
+    return u ? (p + ' [' + u + ']') : p;
+  }
+  // Every name that behaves like an ingredient, wherever it is written down:
+  // the list itself, plus the ones that only survive inside an old recipe or a
+  // planned week. Those orphans have to come too, or half the plan goes on
+  // pointing at English names nothing resolves any more.
+  function ingredientNamesInUse(){
+    const seen = {};
+    const order = [];
+    const recipeNames = {};
+    (state.recipes || []).forEach(function(r){ recipeNames[(r.name||'').trim().toLowerCase()] = true; });
+    const add = function(raw, fromList){
+      const n = String(raw == null ? '' : raw).trim();
+      if(!n) return;
+      const k = n.toLowerCase();
+      if(!fromList && recipeNames[k]) return;     // that is a recipe, not an ingredient
+      if(seen[k]){ if(fromList) seen[k].inList = true; return; }
+      seen[k] = {name: n, inList: !!fromList};
+      order.push(k);
+    };
+    (state.ingredients || []).forEach(function(i){ add(i.name, true); });
+    (state.recipes || []).forEach(function(r){
+      (r.items || []).forEach(function(it){ if(!it.recipeId) add(it.name, false); });
+    });
+    (state.weeks || []).forEach(function(w){
+      DAYS.forEach(function(d){
+        const day = (w.days || {})[d]; if(!day) return;
+        SLOTS.forEach(function(s){
+          const slot = day[s]; if(!slot) return;
+          (slot.rows || []).forEach(function(row){ add(row.name, false); });
+          (slot.choices || []).forEach(function(c){ if(c.standalone) add(c.name, false); });
+        });
+      });
+    });
+    return order.map(function(k){ return seen[k]; });
+  }
+  function buildIngredientTranslation(){
+    return ingredientNamesInUse().map(function(entry){
+      const nu = nameAndUnit(entry.name);
+      const hit = italianIngredientName(nu.name);
+      return {
+        old: entry.name,
+        inList: entry.inList,
+        oldPlain: nu.name,
+        oldUnit: nu.unit,
+        plain: hit || nu.name,
+        unit: italianUnit(nu.unit),
+        known: !!hit
+      };
+    });
+  }
+  // Two English names can land on the same Italian one — "Hazelnuts" and the
+  // "Nocciole" typed into a recipe one evening, "Soy Sauce" and "Soya Sauce".
+  // That is a merge, and usually a welcome one: the spellings collapse onto a
+  // single ingredient. It only costs something when BOTH sides are real
+  // entries in the list, because then one row has to go.
+  function translationMerges(rows){
+    const byNew = {};
+    rows.forEach(function(r){
+      const k = composeIngredientName(r.plain, r.unit).trim().toLowerCase();
+      if(!k) return;
+      (byNew[k] = byNew[k] || []).push(r);
+    });
+    const groups = [];
+    Object.keys(byNew).forEach(function(k){
+      const g = byNew[k];
+      if(g.length < 2) return;
+      const inList = g.filter(function(r){ return r.inList; });
+      if(inList.length > 1){
+        // The entry carrying the most nutrition is the one worth keeping.
+        inList.sort(function(a, b){
+          return filledNutrientCount(findIngredient(b.old)) - filledNutrientCount(findIngredient(a.old));
+        });
+      }
+      groups.push({key: k, rows: g, inList: inList, dropped: inList.slice(1)});
+    });
+    return groups;
+  }
+  function filledNutrientCount(ing){
+    if(!ing) return -1;
+    return nutrients().reduce(function(n, k){
+      const v = ing[k.key];
+      return n + ((v === '' || v === null || v === undefined || num(v) === 0) ? 0 : 1);
+    }, 0);
+  }
+  function openIngredientTranslate(){
+    pendingIngredientTranslate = {rows: buildIngredientTranslation()};
+    rerender();
+  }
+  function closeIngredientTranslate(){
+    pendingIngredientTranslate = null;
+    rerender();
+  }
+  function setTranslationField(el){
+    // No redraw while typing: the table is scratch state, and a rebuild would
+    // take the caret with it.
+    if(!pendingIngredientTranslate) return;
+    const row = pendingIngredientTranslate.rows[parseInt(el.dataset.idx, 10)];
+    if(!row) return;
+    row[el.dataset.field] = el.value;
+  }
+  // The rename itself, shared by the translation and by undoing it. byFull
+  // maps a whole name ("Egg [unit]") and byPlain the bare one the shopping
+  // list is sometimes keyed by; both are lowercased keys.
+  function applyIngredientRename(byFull, byPlain, dropNames, restore){
+    const rename = function(name){
+      const hit = byFull[String(name == null ? '' : name).trim().toLowerCase()];
+      return hit === undefined ? name : hit;
+    };
+    const drop = dropNames || {};
+    if(Object.keys(drop).length){
+      state.ingredients = (state.ingredients || []).filter(function(i){
+        return !drop[String(i.name || '').trim().toLowerCase()];
+      });
+    }
+    (restore || []).forEach(function(i){ state.ingredients.push(JSON.parse(JSON.stringify(i))); });
+    (state.ingredients || []).forEach(function(i){
+      const next = rename(i.name);
+      if(next === i.name) return;
+      i.name = next;
+      i.unit = nameAndUnit(next).unit;     // the unit lives in both places
+    });
+    (state.recipes || []).forEach(function(r){
+      (r.items || []).forEach(function(it){ if(!it.recipeId) it.name = rename(it.name); });
+    });
+    (state.weeks || []).forEach(function(w){
+      DAYS.forEach(function(d){
+        const day = (w.days || {})[d]; if(!day) return;
+        SLOTS.forEach(function(sl){
+          const slot = day[sl]; if(!slot) return;
+          (slot.rows || []).forEach(function(row){ row.name = rename(row.name); });
+          // A choice names a recipe unless it is a standalone ingredient.
+          (slot.choices || []).forEach(function(c){ if(c.standalone) c.name = rename(c.name); });
+        });
+      });
+      // Shopping entries are keyed by the bare name in older weeks and by the
+      // full one in newer weeks, so try both.
+      if(w.shoppingItems){
+        const next = {};
+        Object.keys(w.shoppingItems).forEach(function(k){
+          const lk = k.trim().toLowerCase();
+          const hit = byFull[lk] !== undefined ? byFull[lk] : byPlain[lk];
+          const key = hit === undefined ? k : hit;
+          // If two old names merge, keep whichever was already ticked.
+          if(next[key] && next[key].checked) return;
+          next[key] = w.shoppingItems[k];
+        });
+        w.shoppingItems = next;
+      }
+      (w.extraShoppingItems || []).forEach(function(x){ if(x && x.name) x.name = rename(x.name); });
+    });
+  }
+  function applyIngredientTranslation(){
+    if(!pendingIngredientTranslate) return;
+    const rows = pendingIngredientTranslate.rows;
+    const byFull = {}, byPlain = {};
+    const pairs = [];
+    let changed = 0;
+    rows.forEach(function(r){
+      const next = composeIngredientName(r.plain, r.unit);
+      if(!next.trim()) return;
+      if(next !== r.old){ changed++; pairs.push([r.old, next, r.oldPlain, r.plain]); }
+      byFull[r.old.trim().toLowerCase()] = next;
+      const p = String(r.plain || '').trim();
+      if(p) byPlain[String(r.oldPlain || '').trim().toLowerCase()] = p;
+    });
+    if(!changed){ pendingIngredientTranslate = null; rerender(); return; }
+    // Where two list entries end up with one name, only the survivor stays.
+    const drop = {};
+    const droppedRows = [];
+    translationMerges(rows).forEach(function(g){
+      g.dropped.forEach(function(r){
+        drop[r.old.trim().toLowerCase()] = true;
+        const ing = findIngredient(r.old);
+        if(ing) droppedRows.push(JSON.parse(JSON.stringify(ing)));
+      });
+    });
+    const dropped = droppedRows.length;
+    update(()=>{
+      applyIngredientRename(byFull, byPlain, drop, null);
+      // Keep what it would take to put it all back, so this is not a one-way
+      // door on data that is shared with the rest of the house.
+      state.lastTranslation = {at: Date.now(), pairs: pairs, dropped: droppedRows};
+      pendingIngredientTranslate = null;
+      toastOnly(changed + ' ingredient' + (changed === 1 ? '' : 's') + ' translated into Italian.' +
+        (dropped ? ' ' + dropped + ' duplicate' + (dropped === 1 ? '' : 's') + ' merged away.' : ''));
+    });
+  }
+  function undoIngredientTranslation(){
+    const last = state.lastTranslation;
+    if(!last || !last.pairs || !last.pairs.length) return;
+    if(pendingDelete !== 'undo-translation'){ requestDelete('undo-translation', undoIngredientTranslation); return; }
+    const byFull = {}, byPlain = {};
+    last.pairs.forEach(function(p){
+      byFull[String(p[1]).trim().toLowerCase()] = p[0];
+      if(p[3]) byPlain[String(p[3]).trim().toLowerCase()] = p[2];
+    });
+    const n = last.pairs.length;
+    update(()=>{
+      applyIngredientRename(byFull, byPlain, null, last.dropped || []);
+      state.lastTranslation = null;
+      toastOnly(n + ' name' + (n === 1 ? '' : 's') + ' put back the way they were.');
+    });
+  }
   // "Almond Butter [g]" -> {name: 'Almond Butter', unit: 'g'}
   function nameAndUnit(raw){
     const m = /^(.*?)\s*\[([^\]]+)\]\s*$/.exec(String(raw || '').trim());
@@ -4821,6 +5140,14 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   window.addTypedDayMealIngredient = addTypedDayMealIngredient;
   window.setDayMealPortion = setDayMealPortion;
   window.removeDayMealPicked = removeDayMealPicked;
+  window.openIngredientTranslate = openIngredientTranslate;
+  window.closeIngredientTranslate = closeIngredientTranslate;
+  window.setTranslationField = setTranslationField;
+  window.applyIngredientTranslation = applyIngredientTranslation;
+  window.undoIngredientTranslation = undoIngredientTranslation;
+  window.italianIngredientName = italianIngredientName;
+  window.buildIngredientTranslation = buildIngredientTranslation;
+  window.__translationMerges = translationMerges;   // for the tests
   window.pickDayMealSlot = pickDayMealSlot;
   window.toggleDayMealPerson = toggleDayMealPerson;
   window.selectAllDayMealPeople = selectAllDayMealPeople;
@@ -4863,6 +5190,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   window.onRecipeBatchMultiplierChange = onRecipeBatchMultiplierChange;
   window.toggleFavourite = toggleFavourite;
   window.__plannerRecipeCount = function(){ return (state.recipes||[]).length; };   // for the tests
+  window.__plannerIngredientNames = function(){ return (state.ingredients||[]).map(function(i){ return i.name; }); };
   window.thumbFailed = thumbFailed;
   window.toggleWorkLunch = toggleWorkLunch;
   window.onRecipeWorkLunchChange = onRecipeWorkLunchChange;
@@ -5224,7 +5552,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       const basketHtml = basket.length
         ? '<div class="mp-daymeal-basket">' + basket.map(function(p){
             const nu = nameAndUnit(p.name);
-            const unitLabel = nu.unit && nu.unit !== 'unit' ? nu.unit : '';
+            const unitLabel = nu.unit && !/^(units?|unit\u00e0)$/i.test(nu.unit) ? nu.unit : '';
             const qty = p.kind === 'ingredient'
               ? '<span class="mp-basket-qty">' +
                   '<input type="text" inputmode="decimal" class="mp-basket-qty-input" id="dm_qty_' + esc(p.key) + '" data-key="' + esc(p.key) + '" value="' + esc(p.portion == null ? '' : p.portion) + '" placeholder="qty" oninput="setDayMealPortion(this)">' +
@@ -5328,6 +5656,54 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
           '<button type="button" class="mp-daymeal-choice" onclick="addPerson(true)">+ Guest</button>' +
         '</div>' +
         '<button type="button" class="mp-modal-cancel" onclick="closeManagePeople()">Done</button>' +
+      '</div>' +
+    '</div>';
+  }
+  function renderIngredientTranslatePopup(){
+    if(!pendingIngredientTranslate) return '';
+    const rows = pendingIngredientTranslate.rows;
+    const merges = translationMerges(rows);
+    const mergeKey = {}, droppedRow = {};
+    let droppedCount = 0;
+    merges.forEach(function(g){
+      mergeKey[g.key] = true;
+      g.dropped.forEach(function(r){ droppedRow[r.old] = true; droppedCount++; });
+    });
+    let changing = 0, unknown = 0;
+    rows.forEach(function(r){
+      if(composeIngredientName(r.plain, r.unit) !== r.old) changing++;
+      if(!r.known) unknown++;
+    });
+    const list = rows.map(function(r, i){
+      const next = composeIngredientName(r.plain, r.unit);
+      const same = next === r.old;
+      const merging = !!mergeKey[next.trim().toLowerCase()];
+      const gone = !!droppedRow[r.old];
+      return '<div class="mp-tr-row ' + (same ? 'mp-tr-same' : '') + (merging ? ' mp-tr-merge' : '') + '">' +
+        '<span class="mp-tr-old" title="' + esc(r.old) + '">' + esc(r.old) + '</span>' +
+        '<span class="mp-tr-arrow">&rarr;</span>' +
+        '<input type="text" class="mp-tr-input" id="tr_name_' + i + '" data-idx="' + i + '" data-field="plain" value="' + esc(r.plain) + '" oninput="setTranslationField(this)">' +
+        '<input type="text" class="mp-tr-unit" id="tr_unit_' + i + '" data-idx="' + i + '" data-field="unit" value="' + esc(r.unit) + '" placeholder="unit\u00e0" title="The unit, as it appears in square brackets" oninput="setTranslationField(this)">' +
+        (gone ? '<span class="mp-tr-tag mp-tr-tag-warn" title="This entry is folded into the one above it and removed from the list">merged</span>'
+              : merging ? '<span class="mp-tr-tag" title="Another name becomes this one too \u2014 they end up as a single ingredient">merge</span>'
+              : r.inList ? '' : '<span class="mp-tr-tag" title="Not in your ingredient list any more \u2014 still used by an old recipe or a planned week">old</span>') +
+      '</div>';
+    }).join('');
+    return '<div class="mp-modal-backdrop" onclick="closeIngredientTranslate()">' +
+      '<div class="mp-modal-card mp-tr-modal" onclick="event.stopPropagation()">' +
+        '<p class="mp-modal-title">Ingredients in Italian</p>' +
+        '<p class="mp-daymeal-summary">' + changing + ' of ' + rows.length + ' names change. Every recipe, every planned week and the shopping list are rewritten to match &mdash; nothing is left pointing at an old name. Edit anything that reads wrong before applying.</p>' +
+        (unknown ? '<p class="mp-settings-note">' + unknown + ' name' + (unknown===1?' was':'s were') + ' not in the dictionary and ' + (unknown===1?'is':'are') + ' left alone &mdash; type over ' + (unknown===1?'it':'them') + ' if you want.</p>' : '') +
+        (merges.length ? '<p class="mp-settings-note">' + merges.length + ' pair' + (merges.length===1?'':'s') + ' of spellings end up as one name' +
+            (droppedCount ? ', and ' + droppedCount + ' duplicate entr' + (droppedCount===1?'y is':'ies are') + ' removed from the list (the one keeping its nutrition stays)' : ' \u2014 no entry is lost, the spare spelling was only used inside a recipe') +
+            '. Marked below.</p>' : '') +
+        '<div class="mp-tr-list">' + list + '</div>' +
+        '<div class="mp-suit-row" style="margin-top:10px;">' +
+          '<button type="button" class="mp-week-add" onclick="exportBackup()" title="A full backup \u2014 recipes, ingredients and every planned week \u2014 exactly as they are right now">&#11015; Back everything up first</button>' +
+        '</div>' +
+        '<button type="button" class="mp-modal-btn mp-modal-btn-primary mp-daymeal-add-btn" ' + (changing ? '' : 'disabled') + ' onclick="applyIngredientTranslation()">' +
+          (changing ? 'Translate ' + changing + ' ingredient' + (changing===1?'':'s') : 'Nothing to change') + '</button>' +
+        '<button type="button" class="mp-modal-cancel" onclick="closeIngredientTranslate()">Cancel</button>' +
       '</div>' +
     '</div>';
   }
@@ -5648,7 +6024,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     const a = prettyAmount(amount);
     const u = String(unit || '').trim();
     if(!a) return '';
-    if(!u || /^units?$/i.test(u)) return a;
+    if(!u || /^(units?|unit\u00e0)$/i.test(u)) return a;
     return COOK_TIGHT[u.toLowerCase()] ? a + u : a + ' ' + u;
   }
 
@@ -7351,10 +7727,28 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
         '<label class="mp-batch-toggle"><input type="checkbox" ' + (state.exportItalian?'checked':'') + ' onchange="toggleExportItalian(this)"> Translate into Italian on the way out</label>' +
         '<p class="mp-settings-note mp-settings-sub-note">Names, ingredients and steps only \u2014 never the quantities. Your recipes here are left exactly as they are.</p>'
       ) +
+      settingsSection('language', 'Ingredient language',
+        '<p class="mp-settings-note">Renames your ingredients into Italian &mdash; in the list, inside every recipe, across every planned week and on the shopping list, all at once. You see the whole list and can edit any of it before anything changes.</p>' +
+        '<div class="mp-suit-row">' +
+          '<button type="button" class="mp-week-add" onclick="openIngredientTranslate()">Translate ingredients into Italian\u2026</button>' +
+          renderUndoTranslationButton() +
+        '</div>' +
+        '<p class="mp-settings-note mp-settings-sub-note">This one changes your data, unlike the export above. It can be undone from here afterwards, and the undo stays available until you translate again.</p>'
+      ) +
       renderAccessSection() +
       renderPhotoSection() +
       renderInstallSection() +
     '</div>';
+  }
+  function renderUndoTranslationButton(){
+    const last = state.lastTranslation;
+    if(!last || !last.pairs || !last.pairs.length) return '';
+    const when = new Date(last.at || Date.now());
+    const label = isNaN(when.getTime()) ? '' : (' (' + when.toLocaleDateString() + ')');
+    const sure = pendingDelete === 'undo-translation';
+    return '<button type="button" class="mp-week-add ' + (sure ? 'mp-confirm' : '') + '" onclick="undoIngredientTranslation()"' +
+      ' title="Put all ' + last.pairs.length + ' names back exactly as they were">' +
+      (sure ? 'Click again to put them back' : ('\u21a9 Undo the translation' + label)) + '</button>';
   }
   function onImportFunctionChange(el){
     // Quiet save: redrawing per keystroke would swallow characters, and the URL
@@ -7826,7 +8220,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   }
   function renderApp(){
     const root = document.getElementById('mp-root');
-    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderPrepBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderAccountPopup();
+    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderPrepBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup();
   }
 
   async function boot(tries){
