@@ -290,6 +290,13 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 .mp-cal-key-now { border: 2px solid var(--gold, #C9A24B); }
 .mp-cal-key-sel { background: var(--ink); }
 .mp-cal-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.mp-planner-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 12px; flex-wrap: nowrap; }
+.mp-planner-row .mp-week-pick { padding: 7px 10px; font-size: 13px; white-space: nowrap; flex: 0 0 auto; }
+.mp-planner-row .mp-person-toggle { flex: 0 0 auto; }
+.mp-planner-row .mp-person-toggle-btn { padding: 7px 13px; }
+.mp-planner-row .mp-slides-btn { margin-left: auto; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+.mp-prep-icon { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; background: var(--gold-soft); border: 1px solid #E6D6AE; border-radius: 999px; padding: 6px 10px; font: 700 13px 'Karla', system-ui, sans-serif; color: #7A5A1C; }
+.mp-prep-icon-on { background: #F3E2B3; }
 .mp-prep-compact { display: inline-block; padding: 0 12px; border-radius: 999px; margin-bottom: 10px; }
 .mp-prep-compact .mp-prep-banner-title { padding: 6px 0; width: auto; gap: 6px; }
 .mp-prep-count { font-weight: 800; }
@@ -5400,13 +5407,13 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       '</div>';
     }
 
-    const isNow = activeWeek && activeWeek.weekStart && activeWeek.weekStart <= today && toISODate(addDays(parseISODate(activeWeek.weekStart), 6)) >= today;
-    return '<div class="mp-week-bar">' +
-      '<button type="button" class="mp-week-pick" onclick="openCal()" aria-label="Choose a week">' +
-        '<span aria-hidden="true">&#128197;</span> <span class="mp-week-pick-label">' + esc(activeWeek ? weekDropdownLabel(activeWeek) : 'Choose a week') + '</span>' +
-        (isNow ? '<span class="mp-week-now">this week</span>' : '') +
-      '</button>' +
-    '</div>';
+    return '<div class="mp-week-bar">' + renderWeekPickBtn(activeWeek) + '</div>';
+  }
+  function renderWeekPickBtn(activeWeek){
+    if(!activeWeek) activeWeek = state.weeks.find(function(w){ return w.id === state.activeWeekId; }) || state.weeks[0];
+    return '<button type="button" class="mp-week-pick" onclick="openCal()" aria-label="Choose a week">' +
+      '<span aria-hidden="true">&#128197;</span> <span class="mp-week-pick-label">' + esc(activeWeek ? weekDropdownLabel(activeWeek) : 'Choose a week') + '</span>' +
+    '</button>';
   }
   // ---------- calendar week picker ----------
   let calOpen = false, calMonth = null;
@@ -5477,12 +5484,9 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
           '<button type="button" class="mp-icon-btn" onclick="calNav(-1)" aria-label="Previous month">&#8249;</button>' +
           '<strong class="mp-cal-title">' + MONTH_NAMES_LONG[first.getMonth()] + ' ' + first.getFullYear() + '</strong>' +
           '<button type="button" class="mp-icon-btn" onclick="calNav(1)" aria-label="Next month">&#8250;</button>' +
-          '<button type="button" class="mp-week-add" onclick="calToday()">Today</button>' +
         '</div>' +
         '<div class="mp-cal-dow">' + ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(d){ return '<span>' + d.charAt(0) + '</span>'; }).join('') + '<span></span></div>' +
         '<div class="mp-cal-grid">' + rows + '</div>' +
-        '<p class="mp-cal-legend"><span class="mp-cal-key mp-cal-key-now"></span> this week &nbsp; <span class="mp-cal-key mp-cal-key-sel"></span> shown &nbsp; &#9679; has a plan &nbsp; Tap any week; an empty one starts a new plan.</p>' +
-        (legacy ? '<div class="mp-cal-actions">' + legacy + '</div>' : '') + actions +
         '<button type="button" class="mp-modal-cancel" onclick="closeCal()">Close</button>' +
       '</div>' +
     '</div>';
@@ -5751,16 +5755,14 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       '</div>' +
     '</div>';
   }
-  function renderPersonViewToggle(){
+  function renderPersonToggleOnly(){
     const btns = people().map(function(p){
       return '<button type="button" class="mp-person-toggle-btn ' + (plannerPersonView===p.id?'active':'') + '" onclick="setPlannerPersonView(\'' + p.id + '\')" title="' + esc(p.name) + '" aria-label="' + esc(p.name) + '">' + esc(String(p.name || '?').trim().charAt(0).toUpperCase()) + '</button>';
     }).join('');
-    return '<div class="mp-planner-toolbar">' +
-      '<div class="mp-person-toggle">' + btns + '</div>' +
-      '<div class="mp-toolbar-actions">' +
-        '<button type="button" class="mp-week-add mp-slides-btn" onclick="toggleSlides()">' + (plannerSlides ? 'List view' : 'Day slides') + '</button>' +
-      '</div>' +
-    '</div>';
+    return '<div class="mp-person-toggle">' + btns + '</div>';
+  }
+  function renderSlidesBtn(){
+    return '<button type="button" class="mp-week-add mp-slides-btn" onclick="toggleSlides()">' + (plannerSlides ? 'List' : 'Slides') + '</button>';
   }
   function renderManagePeoplePopup(){
     if(!showManagePeople) return '';
@@ -6046,8 +6048,11 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
         return '<button type="button" class="mp-slide-pill" data-i="' + i + '" onclick="goSlide(' + i + ')">' + d + '</button>';
       }).join('') + '</div>';
     }
-    return renderWeekTabs() +
-      renderPersonViewToggle() + pager +
+    const editingNow = editingWeekId && state.weeks.some(function(w){ return w.id === editingWeekId; });
+    const topRow = (editingNow ? renderWeekTabs() : '') +
+      '<div class="mp-planner-row">' + (editingNow ? '' : renderWeekPickBtn(week)) + renderPersonToggleOnly() + renderPrepIcon() + renderSlidesBtn() + '</div>' +
+      renderPrepBanner();
+    return topRow + pager +
       '<div class="mp-days-row' + (plannerSlides ? ' mp-days-slides' : '') + '">' + days + '</div>' +
       renderWeekSummary(week) + datalist;
   }
@@ -7443,38 +7448,36 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       return e;
     });
   }
-  function renderPrepBanner(){
-    if(prepBannerDismissed) return '';
-    if(state.activeTab !== 'planner') return '';
+  function prepList(){
+    if(prepBannerDismissed) return [];
+    if(state.activeTab !== 'planner') return [];
     const week = state.weeks.find(function(w){ return w.id===state.activeWeekId; }) || state.weeks[0];
-    const list = prepAheadForWeek(week);
+    return prepAheadForWeek(week);
+  }
+  function renderPrepIcon(){
+    const list = prepList();
+    if(!list.length) return '';
+    const n = list.length;
+    const summary = n === 1 ? '1 thing needs prep in advance' : n + ' things need prep in advance';
+    return '<button type="button" class="mp-prep-icon' + (prepBannerOpen ? ' mp-prep-icon-on' : '') + '" onclick="togglePrepBanner()" title="' + esc(summary) + '" aria-label="' + esc(summary) + '" aria-expanded="' + (prepBannerOpen ? 'true' : 'false') + '">' +
+      '<span aria-hidden="true">&#9200;</span><span class="mp-prep-count">' + n + '</span></button>';
+  }
+  function renderPrepBanner(){
+    if(!prepBannerOpen) return '';
+    const list = prepList();
     if(!list.length) return '';
     const items = list.map(function(e){
       const qty = e.total ? (' <strong>' + e.total.toFixed(0) + '</strong>') : '';
-      return '<li><strong>' + esc(e.name) + '</strong>' + qty + ' — used ' + esc(e.dayList.join(', ')) +
+      return '<li><strong>' + esc(e.name) + '</strong>' + qty + ' \u2014 used ' + esc(e.dayList.join(', ')) +
         '<span class="mp-prep-note">' + esc(e.note) + '</span></li>';
     }).join('');
-    // One line until you ask for more. It used to open at full height above
-    // the tabs, which pushed the week itself off the screen.
-    const n = list.length;
-    const summary = n === 1
-      ? '1 thing needs prep in advance'
-      : n + ' things need prep in advance';
-    if(!prepBannerOpen){
-      return '<div class="mp-prep-banner mp-prep-compact"><button type="button" class="mp-prep-banner-title" onclick="togglePrepBanner()" title="' + esc(summary) + '" aria-label="' + esc(summary) + '" aria-expanded="false">' +
-        '<span>&#9200;</span><span class="mp-prep-count">' + n + '</span></button></div>';
-    }
-    return '<div class="mp-prep-banner ' + (prepBannerOpen ? 'mp-prep-open' : '') + '">' +
-      '<button type="button" class="mp-prep-banner-title" onclick="togglePrepBanner()" aria-expanded="' + (prepBannerOpen?'true':'false') + '">' +
-        '<span class="mp-prep-caret">' + (prepBannerOpen ? '&#9662;' : '&#9656;') + '</span>' +
-        '<span>&#9200; ' + summary + '</span>' +
-      '</button>' +
-      (prepBannerOpen
-        ? '<ul class="mp-prep-banner-list">' + items + '</ul>' +
-          '<div class="mp-prep-banner-actions">' +
-            '<button type="button" class="mp-week-add" onclick="dismissPrepBanner()">Dismiss for now</button>' +
-          '</div>'
-        : '') +
+    return '<div class="mp-prep-banner mp-prep-open">' +
+      '<div class="mp-prep-banner-title" style="cursor:default">&#9200; Prepare in advance</div>' +
+      '<ul class="mp-prep-banner-list">' + items + '</ul>' +
+      '<div class="mp-prep-banner-actions">' +
+        '<button type="button" class="mp-week-add" onclick="togglePrepBanner()">Close</button>' +
+        '<button type="button" class="mp-week-add" onclick="dismissPrepBanner()">Dismiss for now</button>' +
+      '</div>' +
     '</div>';
   }
   function togglePrepBanner(){
@@ -8504,7 +8507,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   }
   function renderApp(){
     const root = document.getElementById('mp-root');
-    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderPrepBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup() + renderCalendarPopup();
+    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup() + renderCalendarPopup();
     try { initSlides(); } catch(e){}
   }
 

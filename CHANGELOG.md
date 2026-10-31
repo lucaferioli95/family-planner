@@ -2,6 +2,10 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.2.1 - 2026-10-31
+- Planner controls fit on one row: calendar button, A / L switch, prep clock icon and the Slides / List switch. The "this week" tag is gone from the button.
+- The calendar is now only the month and its weeks: removed the legend text and the Today, Rename, Copy and Delete buttons.
+
 ## 1.2.0 - 2026-10-31
 - Planner header decluttered on phones: the week dropdown is replaced by a calendar (tap the date button). Every row is a week; future weeks are there, weeks that already have a plan are marked, "this week" is outlined, and the week you are viewing is filled in. Tapping an empty week starts a new plan for it. Rename, copy and delete for a week moved into the calendar.
 - "Things to prepare in advance" now shows as a small clock icon with the count; tap it to see the list.
