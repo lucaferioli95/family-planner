@@ -2,6 +2,9 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.2.2 - 2026-10-31
+- In Slides view, today's day in the Mon to Sun strip is softly highlighted (gold) when the week you are viewing contains today.
+
 ## 1.2.1 - 2026-10-31
 - Planner controls fit on one row: calendar button, A / L switch, prep clock icon and the Slides / List switch. The "this week" tag is gone from the button.
 - The calendar is now only the month and its weeks: removed the legend text and the Today, Rename, Copy and Delete buttons.
