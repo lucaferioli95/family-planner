@@ -7,8 +7,8 @@
 //     shopping list and meal plan are readable offline. Writes still need a
 //     connection; the app shows its normal save-error state when offline.
 
-const SHELL_CACHE = 'meal-planner-shell-v10';
-const DATA_CACHE = 'meal-planner-data-v10';
+const SHELL_CACHE = 'meal-planner-shell-v11';
+const DATA_CACHE = 'meal-planner-data-v11';
 
 const SHELL_FILES = [
   './',

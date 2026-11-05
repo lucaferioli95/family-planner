@@ -314,6 +314,17 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
   .mp-slides-btn { display: inline-block; }
   .mp-slide-pager { display: flex; gap: 6px; overflow-x: auto; margin: 6px 0 4px; padding-bottom: 2px; scrollbar-width: none; }
   .mp-slide-pill { flex: 1 0 auto; border: 1px solid var(--line); background: #fff; color: var(--ink-soft); border-radius: 999px; padding: 6px 12px; font: 600 12px 'Karla', system-ui, sans-serif; }
+  .mp-ingfind { margin: 18px 0 8px; padding: 14px; background: var(--surface, #fff); border: 1px solid var(--line, #e2dccd); border-radius: 12px; }
+  .mp-ingfind h3 { margin: 0 0 8px; font-size: 16px; }
+  .mp-ingfind-input { width: 100%; padding: 10px 12px; border: 1px solid var(--line, #d8d1c0); border-radius: 10px; font: inherit; background: transparent; color: inherit; }
+  .mp-ingfind-hint { color: var(--muted, #7a7466); margin: 10px 0 0; font-size: 14px; }
+  .mp-ingfind-group { margin-top: 12px; }
+  .mp-ingfind-head { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line, #e2dccd); }
+  .mp-ingfind-head span { color: var(--muted, #7a7466); font-size: 13px; }
+  .mp-ingfind-use { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; padding: 6px 0; border-bottom: 1px dashed var(--line, #e2dccd); font-size: 14px; }
+  .mp-ingfind-when { font-weight: 600; }
+  .mp-ingfind-what { grid-column: 1; color: var(--muted, #7a7466); font-size: 13px; }
+  .mp-ingfind-amt { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-weight: 600; }
   .mp-slide-pill.mp-slide-today { border-color: var(--gold, #C9A24B); background: var(--gold-soft, #F6EBCB); color: #7A5A1C; box-shadow: inset 0 0 0 1px var(--gold, #C9A24B); }
   .mp-slide-pill.active { background: var(--ink); color: var(--chalk); border-color: var(--ink); }
   .mp-days-row.mp-days-slides { display: flex; grid-template-columns: none; gap: 10px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; margin: 8px -12px 18px; padding: 0 12px 120px; margin-bottom: -102px; scrollbar-width: none; overscroll-behavior-x: contain; }
@@ -6032,6 +6043,65 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     store('mp-hide-week-summary', stored('mp-hide-week-summary') === '1' ? null : '1');
     rerender();
   }
+  // ---- Find an ingredient: where it is used in the week on screen ----
+  let ingQuery = '';
+  function plainText(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+  function ingredientUses(week, query){
+    const words = plainText(query).split(/\s+/).filter(Boolean);
+    const out = {};
+    if(!words.length) return [];
+    DAYS.forEach(function(d){
+      SLOTS.forEach(function(s){
+        const slotObj = week.days[d][s]; if(!slotObj) return;
+        (slotObj.rows || []).forEach(function(r){
+          const nu = nameAndUnit(r.name);
+          const hay = plainText(nu.name);
+          if(!words.every(function(w){ return hay.indexOf(w) !== -1; })) return;
+          let multiplier = 1, choice = null;
+          if(r.choiceId){
+            choice = (slotObj.choices || []).find(function(c){ return c.id === r.choiceId; }) || null;
+            if(choice){
+              const recipe = !choice.standalone ? state.recipes.find(function(rec){ return rec.name === choice.name; }) : null;
+              multiplier = (recipe && recipe.batchCook) ? (num(recipe.batchMultiplier) || 1) : ((choice.people && choice.people.length) || 1);
+            }
+          }
+          const p = typeof r.portion === 'number' ? r.portion : parseFloat(r.portion);
+          const key = (r.name || '').trim();
+          if(!out[key]) out[key] = {name: nu.name, unit: nu.unit, total: 0, uses: []};
+          const used = (isNaN(p) ? 0 : p) * multiplier;
+          out[key].total += used;
+          out[key].uses.push({day: d, slot: s, meal: choice ? choice.name : '', people: choice && choice.people ? choice.people.map(personName) : [], amount: used});
+        });
+      });
+    });
+    return Object.keys(out).sort().map(function(k){ return out[k]; });
+  }
+  function ingFindHtml(week){
+    const q = ingQuery.trim();
+    if(q.length < 2) return '<p class="mp-ingfind-hint">Type an ingredient to see which days it is used this week.</p>';
+    const groups = ingredientUses(week, q);
+    if(!groups.length) return '<p class="mp-ingfind-hint">&ldquo;' + esc(q) + '&rdquo; is not used in this week.</p>';
+    return groups.map(function(g){
+      const tot = prettyQty(g.total, g.unit);
+      return '<div class="mp-ingfind-group"><div class="mp-ingfind-head"><b>' + esc(g.name) + '</b>' + (tot ? '<span>' + esc(tot) + ' in total</span>' : '') + '</div>' +
+        g.uses.map(function(u){
+          return '<div class="mp-ingfind-use"><span class="mp-ingfind-when">' + esc(dayDateLabel(week, u.day)) + ' &middot; ' + esc(SLOT_LABELS[u.slot] || u.slot) + '</span>' +
+            '<span class="mp-ingfind-what">' + esc(u.meal || 'Added on its own') + (u.people.length ? ' &middot; ' + esc(u.people.join(', ')) : '') + '</span>' +
+            '<span class="mp-ingfind-amt">' + esc(prettyQty(u.amount, g.unit)) + '</span></div>';
+        }).join('') + '</div>';
+    }).join('');
+  }
+  function renderIngFind(week){
+    return '<section class="mp-ingfind"><h3>Find an ingredient</h3>' +
+      '<input type="search" id="mp-ingfind-input" class="mp-ingfind-input" list="mp-ingredient-list" placeholder="e.g. eggs, spinach, rice\u2026" autocomplete="off" value="' + esc(ingQuery) + '" oninput="ingFind(this.value)">' +
+      '<div id="mp-ingfind-out">' + ingFindHtml(week) + '</div></section>';
+  }
+  function ingFind(v){
+    ingQuery = v;
+    const week = state.weeks.find(function(w){ return w.id === state.activeWeekId; }) || state.weeks[0];
+    const out = document.getElementById('mp-ingfind-out'); if(out) out.innerHTML = ingFindHtml(week);
+  }
+  window.ingFind = ingFind;
   function renderPlannerTab(){
     const week = state.weeks.find(w=>w.id===state.activeWeekId) || state.weeks[0];
     // Work out the leftover prompts once, then show each on its own meal — a banner
@@ -6057,7 +6127,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       renderPrepBanner();
     return topRow + pager +
       '<div class="mp-days-row' + (plannerSlides ? ' mp-days-slides' : '') + '">' + days + '</div>' +
-      renderWeekSummary(week) + datalist;
+      renderWeekSummary(week) + renderIngFind(week) + datalist;
   }
   function renderIngredientsTab(){
     let rows = '';
