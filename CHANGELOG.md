@@ -2,6 +2,9 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.3.1 - 2026-11-05
+- The footer now shows the app version, where it is hosted (Cloudflare) and a link to this changelog, so you can tell which version is installed.
+
 ## 1.3.0 - 2026-11-05
 - New "Find an ingredient" box at the bottom of the Planner tab. Type an ingredient (accents and capitals do not matter) and it lists every day and meal in the week on screen that uses it, who it is for and the amount, with the total for the week. The suggestions list helps you pick the name.
 
