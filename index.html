@@ -283,6 +283,13 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 .mp-cal-week.mp-cal-active { background: var(--ink); color: var(--chalk); }
 .mp-cal-day { text-align: center; font-size: 14px; padding: 8px 0; border-radius: 50%; }
 .mp-cal-out { opacity: .35; }
+.mp-cal-dow7 { grid-template-columns: repeat(7, 1fr); }
+.mp-cal-wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.mp-cal-dayb { border: 0; background: none; font: inherit; font-size: 14px; color: var(--ink); padding: 9px 0; border-radius: 50%; }
+.mp-cal-dayb:disabled { opacity: .25; cursor: default; }
+.mp-cal-dayb.mp-cal-ok { background: var(--surface); }
+.mp-cal-dayb.mp-cal-sel { background: var(--ink); color: var(--chalk); }
+.mp-cal-dayb.mp-cal-anchor { outline: 2px solid var(--gold, #C9A24B); outline-offset: -2px; }
 .mp-cal-today { font-weight: 800; text-decoration: underline; }
 .mp-cal-mark { font-size: 9px; text-align: center; opacity: .7; }
 .mp-cal-legend { font-size: 11px; color: var(--ink-soft); margin: 10px 0; line-height: 1.5; }
@@ -5458,6 +5465,94 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     pendingNewWeek = {mode: 'choose', weekStart: start, wd: defaultWorkDays(), plan: null};
     rerender();
   }
+  // ---------- shopping: pick the days from the calendar ----------
+  let shopCalOpen = false, shopCalMonth = null, shopCalAnchor = null;
+  function shopWeek(){ return state.weeks.find(function(w){ return w.id === state.shoppingWeekId; }) || state.weeks.find(function(w){ return w.id === state.activeWeekId; }) || state.weeks[0]; }
+  function shopRangeIso(week){
+    if(!week || !week.weekStart) return null;
+    const a = Math.min(DAYS.indexOf(state.shoppingFromDay), DAYS.indexOf(state.shoppingToDay));
+    const b = Math.max(DAYS.indexOf(state.shoppingFromDay), DAYS.indexOf(state.shoppingToDay));
+    const start = parseISODate(week.weekStart);
+    return {from: addDays(start, Math.max(a, 0)), to: addDays(start, b === -1 ? 6 : b)};
+  }
+  function shopRangeLabel(){
+    const w = shopWeek(); const rg = shopRangeIso(w);
+    if(!rg) return w ? (w.label + ': ' + state.shoppingFromDay + ' to ' + state.shoppingToDay) : 'Choose days';
+    const f = rg.from, t = rg.to, sameDay = toISODate(f) === toISODate(t), sameMonth = f.getMonth() === t.getMonth();
+    const dn = function(d){ return DAYS[(d.getDay() + 6) % 7]; };
+    const mon = function(d){ return MONTH_NAMES_LONG[d.getMonth()].slice(0, 3); };
+    if(sameDay) return dn(f) + ' ' + f.getDate() + ' ' + mon(f);
+    return dn(f) + ' ' + f.getDate() + (sameMonth ? '' : ' ' + mon(f)) + ' \u2013 ' + dn(t) + ' ' + t.getDate() + ' ' + mon(t);
+  }
+  function openShopCal(){
+    const rg = shopRangeIso(shopWeek());
+    const base = rg ? rg.from : new Date();
+    shopCalMonth = toISODate(new Date(base.getFullYear(), base.getMonth(), 1));
+    shopCalAnchor = null; shopCalOpen = true; rerender();
+  }
+  function closeShopCal(){ shopCalOpen = false; shopCalAnchor = null; rerender(); }
+  function shopCalNav(n){ const d = parseISODate(shopCalMonth); shopCalMonth = toISODate(new Date(d.getFullYear(), d.getMonth() + n, 1)); rerender(); }
+  function shopCalToday(){ const t = new Date(); shopCalMonth = toISODate(new Date(t.getFullYear(), t.getMonth(), 1)); rerender(); }
+  function shopCalAll(){
+    // The whole week that holds the first day tapped (or the one being shown).
+    const w = shopWeek(); if(!w) return;
+    update(()=>{ state.shoppingWeekId = w.id; state.shoppingFromDay = 'Mon'; state.shoppingToDay = 'Sun'; });
+    shopCalOpen = false; shopCalAnchor = null; rerender();
+  }
+  function shopCalPick(el){
+    const iso = el.dataset.iso;
+    const d = parseISODate(iso);
+    const key = toISODate(mondayOf(d));
+    const w = state.weeks.find(function(x){ return weekStartKey(x) === key; });
+    if(!w) return;
+    const name = DAYS[(d.getDay() + 6) % 7];
+    const sameWeek = shopCalAnchor && toISODate(mondayOf(parseISODate(shopCalAnchor))) === key;
+    if(shopCalAnchor && sameWeek){
+      const ai = DAYS.indexOf(DAYS[(parseISODate(shopCalAnchor).getDay() + 6) % 7]), bi = DAYS.indexOf(name);
+      update(()=>{ state.shoppingWeekId = w.id; state.shoppingFromDay = DAYS[Math.min(ai, bi)]; state.shoppingToDay = DAYS[Math.max(ai, bi)]; });
+      shopCalOpen = false; shopCalAnchor = null; rerender();
+    } else {
+      update(()=>{ state.shoppingWeekId = w.id; state.shoppingFromDay = name; state.shoppingToDay = name; });
+      shopCalAnchor = iso; rerender();
+    }
+  }
+  function renderShopCalPopup(){
+    if(!shopCalOpen || !shopCalMonth) return '';
+    const first = parseISODate(shopCalMonth), today = toISODate(new Date());
+    const have = {}; state.weeks.forEach(function(w){ const k = weekStartKey(w); if(k) have[k] = w; });
+    const cw = shopWeek(), rg = shopRangeIso(cw);
+    const fromIso = rg ? toISODate(rg.from) : '', toIso = rg ? toISODate(rg.to) : '';
+    const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+    let cur = mondayOf(first), rows = '';
+    while(cur <= last){
+      const key = toISODate(cur); const w = have[key];
+      let cells = '';
+      for(let i = 0; i < 7; i++){
+        const d = addDays(cur, i), iso = toISODate(d);
+        const inRange = w && cw && w.id === cw.id && iso >= fromIso && iso <= toIso;
+        const cls = 'mp-cal-dayb' + (d.getMonth() !== first.getMonth() ? ' mp-cal-out' : '') + (iso === today ? ' mp-cal-today' : '') + (inRange ? ' mp-cal-sel' : '') + (iso === shopCalAnchor ? ' mp-cal-anchor' : '') + (w ? ' mp-cal-ok' : '');
+        cells += '<button type="button" class="' + cls + '"' + (w ? ' data-iso="' + iso + '" onclick="shopCalPick(this)"' : ' disabled') + '>' + d.getDate() + '</button>';
+      }
+      rows += '<div class="mp-cal-wk">' + cells + '</div>';
+      cur = addDays(cur, 7);
+    }
+    const hint = shopCalAnchor ? 'Now tap the last day, or the same day again for just that day.' : 'Tap a day, or tap two days in the same week to pick a range. Days in weeks without a plan are greyed out.';
+    return '<div class="mp-modal-backdrop" onclick="closeShopCal()">' +
+      '<div class="mp-modal-card mp-cal-card" onclick="event.stopPropagation()">' +
+        '<div class="mp-cal-head">' +
+          '<button type="button" class="mp-icon-btn" onclick="shopCalNav(-1)" aria-label="Previous month">&#8249;</button>' +
+          '<strong class="mp-cal-title">' + MONTH_NAMES_LONG[first.getMonth()] + ' ' + first.getFullYear() + '</strong>' +
+          '<button type="button" class="mp-icon-btn" onclick="shopCalNav(1)" aria-label="Next month">&#8250;</button>' +
+        '</div>' +
+        '<div class="mp-cal-dow mp-cal-dow7">' + ['M','T','W','T','F','S','S'].map(function(x){ return '<span>' + x + '</span>'; }).join('') + '</div>' +
+        '<div class="mp-cal-grid">' + rows + '</div>' +
+        '<div class="mp-cal-legend">' + hint + '</div>' +
+        '<div class="mp-cal-actions"><button type="button" class="mp-week-add" onclick="shopCalToday()">Today</button><button type="button" class="mp-week-add" onclick="shopCalAll()">Whole week</button></div>' +
+        '<button type="button" class="mp-modal-cancel" onclick="closeShopCal()">Close</button>' +
+      '</div>' +
+    '</div>';
+  }
+  window.openShopCal = openShopCal; window.closeShopCal = closeShopCal; window.shopCalNav = shopCalNav; window.shopCalToday = shopCalToday; window.shopCalAll = shopCalAll; window.shopCalPick = shopCalPick;
   function calPickLegacy(el){ calOpen = false; setActiveWeek(el.dataset.id); }
   function renderCalendarPopup(){
     if(!calOpen || !calMonth) return '';
@@ -7237,10 +7332,10 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     const dayOptionsFrom = DAYS.map(function(d){ return '<option value="' + d + '" ' + (d===state.shoppingFromDay?'selected':'') + '>' + d + '</option>'; }).join('');
     const dayOptionsTo = DAYS.map(function(d){ return '<option value="' + d + '" ' + (d===state.shoppingToDay?'selected':'') + '>' + d + '</option>'; }).join('');
 
+    const hasLegacy = state.weeks.some(function(w){ return !w.weekStart; });
     const controls = '<div class="mp-shop-controls">' +
-      '<label class="mp-shop-control">Week<select onchange="setShoppingWeek(this)">' + weekOptions + '</select></label>' +
-      '<label class="mp-shop-control">From<select onchange="setShoppingFromDay(this)">' + dayOptionsFrom + '</select></label>' +
-      '<label class="mp-shop-control">To<select onchange="setShoppingToDay(this)">' + dayOptionsTo + '</select></label>' +
+      '<button type="button" class="mp-week-pick" onclick="openShopCal()" aria-label="Choose the days to shop for"><span aria-hidden="true">&#128197;</span> <span class="mp-week-pick-label">' + esc(shopRangeLabel()) + '</span></button>' +
+      (hasLegacy ? '<label class="mp-shop-control">Week<select onchange="setShoppingWeek(this)">' + weekOptions + '</select></label>' : '') +
     '</div>';
 
     const shopChips = '<div class="mp-shop-chips">' +
@@ -7331,7 +7426,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     return '<div class="mp-panel"><div class="mp-panel-head"><h2>Shopping list</h2></div>' +
       controls + shopChips + body + '</div>';
   }
-  const APP_VERSION = '1.3.1';
+  const APP_VERSION = '1.4.0';
   function renderFooter(){
     const pendingReset = pendingDelete === 'reset:all';
     return '<footer class="mp-footer">' +
@@ -8584,7 +8679,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   }
   function renderApp(){
     const root = document.getElementById('mp-root');
-    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup() + renderCalendarPopup();
+    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup() + renderCalendarPopup() + renderShopCalPopup();
     try { initSlides(); } catch(e){}
   }
 

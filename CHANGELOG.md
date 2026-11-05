@@ -2,6 +2,9 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.4.0 - 2026-11-05
+- Shopping tab: the Week, From and To drop-downs are replaced by one calendar button showing the days you are shopping for (for example "Mon 9 – Wed 11 Nov"). Tap it, then tap a day, or two days in the same week for a range. "Whole week" and "Today" are there too. Days in weeks that have no plan are greyed out. (The old Week drop-down only appears if you still have an older week without dates.)
+
 ## 1.3.1 - 2026-11-05
 - The footer now shows the app version, where it is hosted (Cloudflare) and a link to this changelog, so you can tell which version is installed.
 
