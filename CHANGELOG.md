@@ -2,6 +2,9 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.5.2 - 2026-11-08
+- Week check is now per person: pick who to check at the top (it starts on the person you are viewing in the planner). A meal counts as filled for someone if it includes them, or if it is a loose ingredient not tied to a meal.
+
 ## 1.5.1 - 2026-11-08
 - The Check button was hidden on wide screens (the website version) because it shared the Slides button's mobile-only styling. It now shows everywhere.
 

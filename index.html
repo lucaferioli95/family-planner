@@ -877,6 +877,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   let recipeModalTab = 'ingredients';
   let pendingDayMealAdd = null;
   let showWeekCheck = false;
+  let weekCheckPerson = null;
   let plannerPersonView = 'p_alice';
   let plannerSlides = (function(){ try { return localStorage.getItem('mp-planner-slides') === '1'; } catch(e){ return false; } })();
   let slideAutoWeek = null;
@@ -5229,6 +5230,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   window.toggleDayMealHaveIt = toggleDayMealHaveIt;
   window.openWeekCheck = openWeekCheck;
   window.closeWeekCheck = closeWeekCheck;
+  window.setWeekCheckPerson = setWeekCheckPerson;
   window.onDayMealSearchChange = onDayMealSearchChange;
   window.pickDayMealRecipe = pickDayMealRecipe;
   window.addTypedDayMealIngredient = addTypedDayMealIngredient;
@@ -5995,7 +5997,8 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       '</div>' +
     '</div>';
   }
-  function openWeekCheck(){ showWeekCheck = true; rerender(); }
+  function openWeekCheck(){ showWeekCheck = true; weekCheckPerson = plannerPersonView; rerender(); }
+  function setWeekCheckPerson(el){ weekCheckPerson = el.dataset.person; rerender(); }
   function closeWeekCheck(){ showWeekCheck = false; rerender(); }
   function renderWeekCheckPopup(){
     if(!showWeekCheck) return '';
@@ -6006,7 +6009,13 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     const body = DAYS.map(function(d){
       const cells = SLOTS.map(function(s){
         const so = week.days && week.days[d] && week.days[d][s];
-        const ok = !!(so && ((so.choices && so.choices.length) || (so.rows && so.rows.length)));
+        // Filled for this person: a meal that includes them (no people list = everyone),
+        // or a loose ingredient row that belongs to no meal.
+        let ok = false;
+        if(so){
+          ok = (so.choices || []).some(function(c){ return (c.people || allPersonIds()).indexOf(weekCheckPerson) !== -1; }) ||
+               (so.rows || []).some(function(r){ return !r.choiceId; });
+        }
         if(!ok) missing++;
         return '<td class="' + (ok?'mp-wc-ok':'mp-wc-no') + '">' + (ok?'&#10003;':'&#10007;') + '</td>';
       }).join('');
@@ -6016,6 +6025,9 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     return '<div class="mp-modal-backdrop" onclick="closeWeekCheck()">' +
       '<div class="mp-modal-card mp-daymeal-card" onclick="event.stopPropagation()">' +
         '<p class="mp-modal-title">Week check</p>' +
+        '<div class="mp-daymeal-choices mp-daymeal-mode">' + people().map(function(pp){
+          return '<button type="button" class="mp-daymeal-choice ' + (weekCheckPerson===pp.id?'mp-daymeal-choice-selected':'') + '" data-person="' + pp.id + '" onclick="setWeekCheckPerson(this)">' + esc(pp.name) + '</button>';
+        }).join('') + '</div>' +
         '<p class="mp-daymeal-summary">' + esc(week.label || '') + ' &middot; ' + msg + '</p>' +
         '<table class="mp-wc-table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>' +
         '<button type="button" class="mp-modal-cancel" onclick="closeWeekCheck()">Close</button>' +
@@ -7471,7 +7483,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     return '<div class="mp-panel"><div class="mp-panel-head"><h2>Shopping list</h2></div>' +
       controls + shopChips + body + '</div>';
   }
-  const APP_VERSION = '1.5.1';
+  const APP_VERSION = '1.5.2';
   function renderFooter(){
     const pendingReset = pendingDelete === 'reset:all';
     return '<footer class="mp-footer">' +
