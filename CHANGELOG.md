@@ -2,6 +2,10 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.5.0 - 2026-11-08
+- Adding a meal: the last step now has an "Already have it" tick. If ticked, what you add is left off the shopping list (it still counts toward nutrition), same as the snowflake on a meal.
+- Planner tab: new "Check" button next to Slides. It shows every day and every meal of the week with a tick (filled) or a cross (empty), and says how many meals are still empty.
+
 ## 1.4.0 - 2026-11-05
 - Shopping tab: the Week, From and To drop-downs are replaced by one calendar button showing the days you are shopping for (for example "Mon 9 – Wed 11 Nov"). Tap it, then tap a day, or two days in the same week for a range. "Whole week" and "Today" are there too. Days in weeks that have no plan are greyed out. (The old Week drop-down only appears if you still have an older week without dates.)
 

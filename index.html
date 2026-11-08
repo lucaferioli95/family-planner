@@ -167,6 +167,14 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 .mp-daymeal-card { max-width: 340px; text-align: left; }
 .mp-daymeal-mode { justify-content: center; margin: 10px 0 4px; }
 .mp-daymeal-card .mp-modal-title { text-align: center; margin-bottom: 4px; }
+.mp-haveit-row { display:flex; align-items:center; gap:8px; margin:12px 0 4px; font-size:14px; }
+.mp-haveit-note { color:var(--sage-deep); font-size:12px; }
+.mp-wc-table { width:100%; border-collapse:collapse; margin:8px 0; text-align:center; font-size:13px; }
+.mp-wc-table th { font-weight:600; padding:6px 2px; }
+.mp-wc-table th:first-child { text-align:left; }
+.mp-wc-table td { padding:6px 2px; font-size:18px; font-weight:700; }
+.mp-wc-ok { color:#2e7d32; }
+.mp-wc-no { color:#c62828; }
 .mp-modal-step { text-align: center; font-size: 10px; letter-spacing: 0; color: var(--sage-deep); font-weight: 700; margin: 0 0 4px; }
 .mp-daymeal-summary { text-align: center; font-size: 11px; color: var(--ink-soft); margin: 0 0 12px; }
 .mp-daymeal-list { max-height: 160px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; margin: 8px 0 4px; }
@@ -867,6 +875,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   let openRecipeId = null;
   let recipeModalTab = 'ingredients';
   let pendingDayMealAdd = null;
+  let showWeekCheck = false;
   let plannerPersonView = 'p_alice';
   let plannerSlides = (function(){ try { return localStorage.getItem('mp-planner-slides') === '1'; } catch(e){ return false; } })();
   let slideAutoWeek = null;
@@ -3368,6 +3377,10 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     else if(days.length > 1) days.splice(idx, 1);
     rerender();
   }
+  function toggleDayMealHaveIt(el){
+    if(!pendingDayMealAdd) return;
+    pendingDayMealAdd.haveIt = !!el.checked;
+  }
   function goToDayMealStep(el){
     if(!pendingDayMealAdd) return;
     pendingDayMealAdd.step = parseInt(el.dataset.step, 10);
@@ -3394,11 +3407,12 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
             // straight in used to leave a row named after the sub-recipe, which
             // counted as no nutrition and landed on the shopping list by name.
             addRecipeToSlotObj(slotObj, recipe, ppl);
+            if(info.haveIt) slotObj.choices[slotObj.choices.length-1].skipShopping = true;
             return;
           }
           const choiceId = uid('choice');
           if(!slotObj.choices) slotObj.choices = [];
-          slotObj.choices.push({id: choiceId, name: item.name, people: ppl, standalone: true, skipShopping: false});
+          slotObj.choices.push({id: choiceId, name: item.name, people: ppl, standalone: true, skipShopping: !!info.haveIt});
           const q = String(item.portion == null ? '' : item.portion).trim();
           slotObj.rows.push({name: item.name, portion: q === '' ? '' : num(q), choiceId: choiceId});
         });
@@ -5211,6 +5225,9 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   window.onDayMealIngredientInput = onDayMealIngredientInput;
   window.pickDayMealIngredient = pickDayMealIngredient;
   window.openAddMealForDay = openAddMealForDay;
+  window.toggleDayMealHaveIt = toggleDayMealHaveIt;
+  window.openWeekCheck = openWeekCheck;
+  window.closeWeekCheck = closeWeekCheck;
   window.onDayMealSearchChange = onDayMealSearchChange;
   window.pickDayMealRecipe = pickDayMealRecipe;
   window.addTypedDayMealIngredient = addTypedDayMealIngredient;
@@ -5847,7 +5864,8 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       const canAdd = basket.length && info.slot && info.people.length && info.days.length;
       const addLabel = !basket.length ? 'Add to the day'
         : basket.length === 1 ? 'Add 1 thing' : ('Add ' + basket.length + ' things');
-      stepBody = modeToggle + basketHtml + pickerHtml +
+      const haveIt = '<label class="mp-haveit-row"><input type="checkbox" ' + (info.haveIt?'checked':'') + ' onchange="toggleDayMealHaveIt(this)"> &#10052; Already have it <span class="mp-haveit-note">(left off the shopping list)</span></label>';
+      stepBody = modeToggle + basketHtml + pickerHtml + haveIt +
         '<button type="button" class="mp-modal-btn mp-modal-btn-primary mp-daymeal-add-btn" ' + (canAdd?'':'disabled') + ' onclick="confirmDayMealAdd()">' + addLabel + '</button>';
     }
 
@@ -5975,6 +5993,32 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
         '<button type="button" class="mp-modal-cancel" onclick="closeClearWeekMenu()">Cancel</button>' +
       '</div>' +
     '</div>';
+  }
+  function openWeekCheck(){ showWeekCheck = true; rerender(); }
+  function closeWeekCheck(){ showWeekCheck = false; rerender(); }
+  function renderWeekCheckPopup(){
+    if(!showWeekCheck) return '';
+    const week = state.weeks.find(w=>w.id===state.activeWeekId) || state.weeks[0];
+    if(!week) return '';
+    let missing = 0;
+    const head = '<tr><th></th>' + SLOTS.map(function(s){ return '<th>' + esc(SLOT_LABELS[s] || s) + '</th>'; }).join('') + '</tr>';
+    const body = DAYS.map(function(d){
+      const cells = SLOTS.map(function(s){
+        const so = week.days && week.days[d] && week.days[d][s];
+        const ok = !!(so && ((so.choices && so.choices.length) || (so.rows && so.rows.length)));
+        if(!ok) missing++;
+        return '<td class="' + (ok?'mp-wc-ok':'mp-wc-no') + '">' + (ok?'&#10003;':'&#10007;') + '</td>';
+      }).join('');
+      return '<tr><th>' + d + '</th>' + cells + '</tr>';
+    }).join('');
+    const msg = missing ? (missing + ' meal' + (missing===1?'':'s') + ' still empty') : 'Every meal is filled';
+    return '<div class="mp-modal-backdrop" onclick="closeWeekCheck()">' +
+      '<div class="mp-modal-card mp-daymeal-card" onclick="event.stopPropagation()">' +
+        '<p class="mp-modal-title">Week check</p>' +
+        '<p class="mp-daymeal-summary">' + esc(week.label || '') + ' &middot; ' + msg + '</p>' +
+        '<table class="mp-wc-table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>' +
+        '<button type="button" class="mp-modal-cancel" onclick="closeWeekCheck()">Close</button>' +
+      '</div></div>';
   }
   function renderWeekSummary(week){
     const totals = weekNutrients(week);
@@ -6220,7 +6264,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     }
     const editingNow = editingWeekId && state.weeks.some(function(w){ return w.id === editingWeekId; });
     const topRow = (editingNow ? renderWeekTabs() : '') +
-      '<div class="mp-planner-row">' + (editingNow ? '' : renderWeekPickBtn(week)) + renderPersonToggleOnly() + renderPrepIcon() + renderSlidesBtn() + '</div>' +
+      '<div class="mp-planner-row">' + (editingNow ? '' : renderWeekPickBtn(week)) + renderPersonToggleOnly() + renderPrepIcon() + renderSlidesBtn() + '<button type="button" class="mp-week-add mp-slides-btn" onclick="openWeekCheck()" title="Quick check: which meals are filled">&#10003; Check</button></div>' +
       renderPrepBanner();
     return topRow + pager +
       '<div class="mp-days-row' + (plannerSlides ? ' mp-days-slides' : '') + '">' + days + '</div>' +
@@ -7426,7 +7470,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     return '<div class="mp-panel"><div class="mp-panel-head"><h2>Shopping list</h2></div>' +
       controls + shopChips + body + '</div>';
   }
-  const APP_VERSION = '1.4.0';
+  const APP_VERSION = '1.5.0';
   function renderFooter(){
     const pendingReset = pendingDelete === 'reset:all';
     return '<footer class="mp-footer">' +
@@ -8679,7 +8723,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   }
   function renderApp(){
     const root = document.getElementById('mp-root');
-    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup() + renderCalendarPopup() + renderShopCalPopup();
+    root.innerHTML = '<div class="mp-topbar">' + renderHeader() + renderTabs() + '</div>' + renderConflictBanner() + renderToast() + '<main class="mp-main">' + renderActiveTab() + '</main>' + renderFooter() + renderDayMealAddPopup() + renderWeekCheckPopup() + renderClearWeekPopup() + renderAddNutrientPopup() + renderManagePeoplePopup() + renderRecipeModal() + renderCookViewModal() + renderNewWeekModal() + renderReplacePicker() + renderMealReplacePicker() + renderRuleEditor() + renderImportModal() + renderStepsImportModal() + renderUsdaModal() + renderRecipeFileModal() + renderIngredientEditorPopup() + renderIngredientTranslatePopup() + renderAccountPopup() + renderCalendarPopup() + renderShopCalPopup();
     try { initSlides(); } catch(e){}
   }
 
