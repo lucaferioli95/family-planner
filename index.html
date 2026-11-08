@@ -168,7 +168,13 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 .mp-daymeal-mode { justify-content: center; margin: 10px 0 4px; }
 .mp-daymeal-card .mp-modal-title { text-align: center; margin-bottom: 4px; }
 .mp-haveit-row { display:flex; align-items:center; gap:8px; margin:12px 0 4px; font-size:14px; }
-.mp-haveit-note { color:var(--sage-deep); font-size:12px; }
+.mp-haveit-row { justify-content:space-between; }
+.mp-haveit-label { display:flex; align-items:center; gap:6px; font-size:18px; }
+.mp-extra-ctl { display:flex; align-items:center; gap:8px; }
+.mp-extra-label { font-size:13px; color:var(--sage-deep); }
+.mp-extra-btn { width:30px; height:30px; border-radius:50%; border:1px solid var(--line); background:#fff; font-size:16px; line-height:1; cursor:pointer; }
+.mp-extra-btn:disabled { opacity:.35; }
+.mp-extra-n { min-width:16px; text-align:center; font-weight:700; }
 .mp-wc-table { width:100%; border-collapse:collapse; margin:8px 0; text-align:center; font-size:13px; }
 .mp-wc-table th { font-weight:600; padding:6px 2px; }
 .mp-wc-table th:first-child { text-align:left; }
@@ -3379,6 +3385,11 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     else if(days.length > 1) days.splice(idx, 1);
     rerender();
   }
+  function changeDayMealExtra(delta){
+    if(!pendingDayMealAdd) return;
+    pendingDayMealAdd.extra = Math.max(0, Math.min(20, (pendingDayMealAdd.extra || 0) + delta));
+    rerender();
+  }
   function toggleDayMealHaveIt(el){
     if(!pendingDayMealAdd) return;
     pendingDayMealAdd.haveIt = !!el.checked;
@@ -3410,11 +3421,13 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
             // counted as no nutrition and landed on the shopping list by name.
             addRecipeToSlotObj(slotObj, recipe, ppl);
             if(info.haveIt) slotObj.choices[slotObj.choices.length-1].skipShopping = true;
+            if(info.extra) slotObj.choices[slotObj.choices.length-1].extra = info.extra;
             return;
           }
           const choiceId = uid('choice');
           if(!slotObj.choices) slotObj.choices = [];
           slotObj.choices.push({id: choiceId, name: item.name, people: ppl, standalone: true, skipShopping: !!info.haveIt});
+          if(info.extra) slotObj.choices[slotObj.choices.length-1].extra = info.extra;
           const q = String(item.portion == null ? '' : item.portion).trim();
           slotObj.rows.push({name: item.name, portion: q === '' ? '' : num(q), choiceId: choiceId});
         });
@@ -5228,6 +5241,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
   window.pickDayMealIngredient = pickDayMealIngredient;
   window.openAddMealForDay = openAddMealForDay;
   window.toggleDayMealHaveIt = toggleDayMealHaveIt;
+  window.changeDayMealExtra = changeDayMealExtra;
   window.openWeekCheck = openWeekCheck;
   window.closeWeekCheck = closeWeekCheck;
   window.setWeekCheckPerson = setWeekCheckPerson;
@@ -5867,7 +5881,15 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       const canAdd = basket.length && info.slot && info.people.length && info.days.length;
       const addLabel = !basket.length ? 'Add to the day'
         : basket.length === 1 ? 'Add 1 thing' : ('Add ' + basket.length + ' things');
-      const haveIt = '<label class="mp-haveit-row"><input type="checkbox" ' + (info.haveIt?'checked':'') + ' onchange="toggleDayMealHaveIt(this)"> &#10052; Already have it <span class="mp-haveit-note">(left off the shopping list)</span></label>';
+      const extraN = info.extra || 0;
+      const haveIt = '<div class="mp-haveit-row">' +
+        '<label class="mp-haveit-label" title="Already have it — left off the shopping list"><input type="checkbox" ' + (info.haveIt?'checked':'') + ' onchange="toggleDayMealHaveIt(this)"> &#10052;</label>' +
+        '<span class="mp-extra-ctl" title="Cook for extra people, for example to freeze">' +
+          '<span class="mp-extra-label">+ extra portions</span>' +
+          '<button type="button" class="mp-extra-btn" onclick="changeDayMealExtra(-1)" ' + (extraN?'':'disabled') + '>&minus;</button>' +
+          '<span class="mp-extra-n">' + extraN + '</span>' +
+          '<button type="button" class="mp-extra-btn" onclick="changeDayMealExtra(1)">+</button>' +
+        '</span></div>';
       stepBody = modeToggle + basketHtml + pickerHtml + haveIt +
         '<button type="button" class="mp-modal-btn mp-modal-btn-primary mp-daymeal-add-btn" ' + (canAdd?'':'disabled') + ' onclick="confirmDayMealAdd()">' + addLabel + '</button>';
     }
@@ -5997,6 +6019,11 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
       '</div>' +
     '</div>';
   }
+  // How many portions a meal is cooked for: the people it is for, plus any extras
+  // added to freeze or keep for later.
+  function choicePortions(c){
+    return ((c && c.people && c.people.length) || 1) + (num(c && c.extra) || 0);
+  }
   function openWeekCheck(){ showWeekCheck = true; weekCheckPerson = plannerPersonView; rerender(); }
   function setWeekCheckPerson(el){ weekCheckPerson = el.dataset.person; rerender(); }
   function closeWeekCheck(){ showWeekCheck = false; rerender(); }
@@ -6013,8 +6040,14 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
         // or a loose ingredient row that belongs to no meal.
         let ok = false;
         if(so){
-          ok = (so.choices || []).some(function(c){ return (c.people || allPersonIds()).indexOf(weekCheckPerson) !== -1; }) ||
-               (so.rows || []).some(function(r){ return !r.choiceId; });
+          const mainMeal = (s === 'Breakfast' || s === 'Lunch' || s === 'Dinner');
+          // Breakfast, lunch and dinner need a recipe; a lone ingredient does not count.
+          // Snacks are fine with just an ingredient.
+          ok = (so.choices || []).some(function(c){
+            if(mainMeal && c.standalone) return false;
+            return (c.people || allPersonIds()).indexOf(weekCheckPerson) !== -1;
+          });
+          if(!mainMeal) ok = ok || (so.rows || []).some(function(r){ return !r.choiceId; });
         }
         if(!ok) missing++;
         return '<td class="' + (ok?'mp-wc-ok':'mp-wc-no') + '">' + (ok?'&#10003;':'&#10007;') + '</td>';
@@ -6216,7 +6249,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
             choice = (slotObj.choices || []).find(function(c){ return c.id === r.choiceId; }) || null;
             if(choice){
               const recipe = !choice.standalone ? state.recipes.find(function(rec){ return rec.name === choice.name; }) : null;
-              multiplier = (recipe && recipe.batchCook) ? (num(recipe.batchMultiplier) || 1) : ((choice.people && choice.people.length) || 1);
+              multiplier = (recipe && recipe.batchCook) ? (num(recipe.batchMultiplier) || 1) : choicePortions(choice);
             }
           }
           const p = typeof r.portion === 'number' ? r.portion : parseFloat(r.portion);
@@ -7321,7 +7354,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
               if(recipe && recipe.batchCook){
                 multiplier = num(recipe.batchMultiplier) || 1;
               } else {
-                multiplier = (choice.people && choice.people.length) || 1;
+                multiplier = choicePortions(choice);
               }
             }
           }
@@ -7483,7 +7516,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     return '<div class="mp-panel"><div class="mp-panel-head"><h2>Shopping list</h2></div>' +
       controls + shopChips + body + '</div>';
   }
-  const APP_VERSION = '1.5.2';
+  const APP_VERSION = '1.6.0';
   function renderFooter(){
     const pendingReset = pendingDelete === 'reset:all';
     return '<footer class="mp-footer">' +
@@ -7663,7 +7696,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
           let mult = 1;
           if(row.choiceId){
             const ch = (slotObj.choices||[]).find(function(x){ return x.id===row.choiceId; });
-            if(ch) mult = (ch.people && ch.people.length) || 1;
+            if(ch) mult = choicePortions(ch);
           }
           if(!map[ing.name]) map[ing.name] = {name: ing.name, note: ing.prepAhead.trim(), total: 0, days: {}};
           map[ing.name].total += num(row.portion) * mult;

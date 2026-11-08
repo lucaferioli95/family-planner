@@ -2,6 +2,10 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.6.0 - 2026-11-08
+- Adding a meal, last step: the "Already have it" line is now just the snowflake tick. New "+ extra portions" counter to cook for more people than the meal is for (for example to freeze); the shopping list and prep amounts scale up for the extras, nutrition stays per person.
+- Week check: breakfast, lunch and dinner are no longer ticked when they only hold a loose ingredient; they need a recipe. Snacks still count with just an ingredient.
+
 ## 1.5.2 - 2026-11-08
 - Week check is now per person: pick who to check at the top (it starts on the person you are viewing in the planner). A meal counts as filled for someone if it includes them, or if it is a loose ingredient not tied to a meal.
 
