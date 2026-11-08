@@ -309,7 +309,8 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 .mp-planner-row .mp-week-pick { padding: 7px 10px; font-size: 13px; white-space: nowrap; flex: 0 0 auto; }
 .mp-planner-row .mp-person-toggle { flex: 0 0 auto; }
 .mp-planner-row .mp-person-toggle-btn { padding: 7px 13px; }
-.mp-planner-row .mp-slides-btn { margin-left: auto; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+.mp-planner-row .mp-check-btn { margin-left: auto; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+.mp-planner-row .mp-slides-btn { margin-left: 0; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
 .mp-prep-icon { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; background: var(--gold-soft); border: 1px solid #E6D6AE; border-radius: 999px; padding: 6px 10px; font: 700 13px 'Karla', system-ui, sans-serif; color: #7A5A1C; }
 .mp-prep-icon-on { background: #F3E2B3; }
 .mp-prep-compact { display: inline-block; padding: 0 12px; border-radius: 999px; margin-bottom: 10px; }
@@ -6264,7 +6265,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     }
     const editingNow = editingWeekId && state.weeks.some(function(w){ return w.id === editingWeekId; });
     const topRow = (editingNow ? renderWeekTabs() : '') +
-      '<div class="mp-planner-row">' + (editingNow ? '' : renderWeekPickBtn(week)) + renderPersonToggleOnly() + renderPrepIcon() + renderSlidesBtn() + '<button type="button" class="mp-week-add mp-slides-btn" onclick="openWeekCheck()" title="Quick check: which meals are filled">&#10003; Check</button></div>' +
+      '<div class="mp-planner-row">' + (editingNow ? '' : renderWeekPickBtn(week)) + renderPersonToggleOnly() + renderPrepIcon() + '<button type="button" class="mp-week-add mp-check-btn" onclick="openWeekCheck()" title="Quick check: which meals are filled">&#10003; Check</button>' + renderSlidesBtn() + '</div>' +
       renderPrepBanner();
     return topRow + pager +
       '<div class="mp-days-row' + (plannerSlides ? ' mp-days-slides' : '') + '">' + days + '</div>' +
@@ -7470,7 +7471,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     return '<div class="mp-panel"><div class="mp-panel-head"><h2>Shopping list</h2></div>' +
       controls + shopChips + body + '</div>';
   }
-  const APP_VERSION = '1.5.0';
+  const APP_VERSION = '1.5.1';
   function renderFooter(){
     const pendingReset = pendingDelete === 'reset:all';
     return '<footer class="mp-footer">' +

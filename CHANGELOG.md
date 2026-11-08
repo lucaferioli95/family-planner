@@ -2,6 +2,9 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.5.1 - 2026-11-08
+- The Check button was hidden on wide screens (the website version) because it shared the Slides button's mobile-only styling. It now shows everywhere.
+
 ## 1.5.0 - 2026-11-08
 - Adding a meal: the last step now has an "Already have it" tick. If ticked, what you add is left off the shopping list (it still counts toward nutrition), same as the snowflake on a meal.
 - Planner tab: new "Check" button next to Slides. It shows every day and every meal of the week with a tick (filled) or a cross (empty), and says how many meals are still empty.
