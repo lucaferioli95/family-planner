@@ -447,7 +447,7 @@ body.mp-scrolled .mp-tab { padding-top: 5px; }
 .mp-cook-ings li { display: flex; gap: 14px; align-items: baseline; font-size: 15px; color: var(--ink); line-height: 1.5; padding: 3px 0; }
 /* The amounts sit in their own right-aligned column, so "480g" and "2" line
    up on the same edge and the names all start in the same place. */
-.mp-cook-qty { flex: 0 0 auto; width: 4.6em; text-align: right; font-family: 'Fraunces', Georgia, serif; font-weight: 600; color: var(--brass); font-variant-numeric: tabular-nums; }
+.mp-cook-qty { flex: 0 0 auto; min-width: 4.6em; white-space: nowrap; text-align: right; font-family: 'Fraunces', Georgia, serif; font-weight: 600; color: var(--brass); font-variant-numeric: tabular-nums; }
 .mp-cook-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
 .mp-cook-steps li { font-size: 13px; line-height: 1.55; color: var(--ink); padding-left: 2px; }
 .mp-cook-steps li::marker { color: var(--sage-deep); font-weight: 700; }
@@ -6560,12 +6560,20 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     if(!glyph) return String(Math.round(n * 100) / 100);
     return (whole ? whole : '') + glyph;
   }
+  // Long unit words wrap onto a second line in the narrow amount column, so the
+  // common ones are shown short.
+  const SHORT_UNITS = {
+    cucchiaino: 'tsp', cucchiaio: 'tbsp', ts: 'tsp', tsp: 'tsp', tbs: 'tbsp', tbsp: 'tbsp',
+    spicchio: 'spic.', spicchi: 'spic.', pizzico: 'pizz.', manciata: 'manc.',
+    mazzetto: 'mazz.', confezione: 'conf.', bustina: 'bust.', rametto: 'ram.', barattolo: 'barat.'
+  };
   function prettyQty(amount, unit){
     const a = prettyAmount(amount);
     const u = String(unit || '').trim();
     if(!a) return '';
     if(!u || /^(units?|unit\u00e0)$/i.test(u)) return a;
-    return COOK_TIGHT[u.toLowerCase()] ? a + u : a + ' ' + u;
+    const short = SHORT_UNITS[u.toLowerCase()] || u;
+    return COOK_TIGHT[u.toLowerCase()] ? a + short : a + ' ' + short;
   }
 
   function renderCookViewModal(){
@@ -7516,7 +7524,7 @@ button, .mp-import-btn, .mp-photo-label { touch-action: manipulation; }
     return '<div class="mp-panel"><div class="mp-panel-head"><h2>Shopping list</h2></div>' +
       controls + shopChips + body + '</div>';
   }
-  const APP_VERSION = '1.6.0';
+  const APP_VERSION = '1.6.1';
   function renderFooter(){
     const pendingReset = pendingDelete === 'reset:all';
     return '<footer class="mp-footer">' +

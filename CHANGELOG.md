@@ -2,6 +2,9 @@
 
 All notable changes to the Family Planner, newest first.
 
+## 1.6.1 - 2026-11-10
+- Recipe view: long units no longer wrap onto a second line under the amount. Cucchiaino and cucchiaio now show as tsp and tbsp, and spicchio, pizzico, manciata, mazzetto, confezione, bustina and similar are abbreviated. The amount column also never wraps.
+
 ## 1.6.0 - 2026-11-08
 - Adding a meal, last step: the "Already have it" line is now just the snowflake tick. New "+ extra portions" counter to cook for more people than the meal is for (for example to freeze); the shopping list and prep amounts scale up for the extras, nutrition stays per person.
 - Week check: breakfast, lunch and dinner are no longer ticked when they only hold a loose ingredient; they need a recipe. Snacks still count with just an ingredient.
